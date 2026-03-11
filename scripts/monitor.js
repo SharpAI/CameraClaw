@@ -119,6 +119,49 @@ function ts() {
   return new Date().toISOString();
 }
 
+// ─── Port Detection ──────────────────────────────────────────────────────────
+
+import { createServer } from 'node:net';
+
+/**
+ * Check if a port is available on the host.
+ */
+function isPortAvailable(port) {
+  return new Promise((resolve) => {
+    const server = createServer();
+    server.once('error', () => resolve(false));
+    server.once('listening', () => {
+      server.close(() => resolve(true));
+    });
+    server.listen(port, '0.0.0.0');
+  });
+}
+
+/**
+ * Find an available port starting from the given port.
+ * Skips ports already used by other instances.
+ */
+async function findAvailablePort(startPort, skip = new Set()) {
+  for (let port = startPort; port < startPort + 100; port++) {
+    if (skip.has(port)) continue;
+    if (await isPortAvailable(port)) return port;
+  }
+  throw new Error(`No available port found starting from ${startPort}`);
+}
+
+/**
+ * Collect all ports currently used by running instances.
+ */
+function usedPorts() {
+  const ports = new Set();
+  for (const inst of instances.values()) {
+    ports.add(inst.port);
+    ports.add(inst.port + 1); // bridge
+    ports.add(inst.novncPort);
+  }
+  return ports;
+}
+
 // ─── Docker Detection ────────────────────────────────────────────────────────
 
 function isDockerAvailable() {
@@ -499,14 +542,26 @@ function buildComposeEnv(instanceId) {
 }
 
 async function createInstance(config, instanceId, name) {
-  const basePort = config.openclaw_gateway_port;
-  const offset = instances.size;
-  const port = basePort + (offset * 10);           // 18789, 18799, ...
-  const vncPort = 5900 + offset;                    // 5900, 5901, ...
-  const novncPort = 6080 + offset;                  // 6080, 6081, ...
+  const used = usedPorts();
   const token = config.openclaw_gateway_token || generateToken();
   const configDir = join(config.openclaw_config_dir, 'instances', instanceId);
   const workspaceDir = join(configDir, 'workspace');
+
+  // Find available ports dynamically
+  let port, novncPort;
+  try {
+    port = await findAvailablePort(config.openclaw_gateway_port, used);
+    used.add(port);
+    used.add(port + 1);
+    novncPort = await findAvailablePort(6080, used);
+  } catch (err) {
+    log(`No available ports for instance "${instanceId}": ${err.message}`);
+    emit({ event: 'error', message: `No available ports: ${err.message}`, retriable: false });
+    return null;
+  }
+
+  // VNC port is internal only (not exposed to host)
+  const vncPort = 5900;
 
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
