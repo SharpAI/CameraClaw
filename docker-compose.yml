@@ -20,24 +20,33 @@ services:
       - "${OPENCLAW_NOVNC_PORT:-6080}:6080"
     init: true
     restart: unless-stopped
+    user: root
     shm_size: "512m"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
+        # Install desktop packages if not already present
+        if ! command -v Xvfb >/dev/null 2>&1; then
+          apt-get update -qq && \
+          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+            xvfb x11vnc websockify imagemagick xdg-utils >/dev/null 2>&1
+          rm -rf /var/lib/apt/lists/*
+        fi
+
         # Start virtual display
         Xvfb :99 -screen 0 1280x720x24 -ac &
         sleep 1
 
         # Start VNC server (no password, shared mode for multiple viewers)
-        x11vnc -display :99 -nopw -shared -forever -rfbport 5900 &
+        x11vnc -display :99 -nopw -shared -forever -rfbport 5900 -bg
 
         # Start noVNC websocket proxy
         websockify --web /usr/share/novnc 6080 localhost:5900 &
 
-        # Start OpenClaw gateway
-        exec node dist/index.js gateway \
-          --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
-          --port 18789
+        # Drop back to node user for the gateway
+        exec su -s /bin/sh node -c "node dist/index.js gateway \
+          --bind ${OPENCLAW_GATEWAY_BIND:-lan} \
+          --port 18789"
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
