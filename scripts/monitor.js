@@ -25,7 +25,7 @@ import { readFile } from 'node:fs/promises';
 
 const DEFAULT_CONFIG = {
   auto_start: true,
-  openclaw_version: 'latest',
+  openclaw_version: 'local',
   recording_mode: 'continuous',
   clip_duration: 300,
   snapshot_fps: 0.5,

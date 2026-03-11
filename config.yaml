@@ -12,6 +12,7 @@ params:
   vlm_analysis: "off"
   vlm_interval: 60
   # OpenClaw gateway
+  openclaw_version: local
   openclaw_config_dir: "~/.openclaw"
   openclaw_gateway_port: 18789
   openclaw_gateway_bind: loopback
