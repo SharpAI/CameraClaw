@@ -92,10 +92,19 @@ else
     cat > "$TMPDIR_BUILD/Dockerfile" << 'DOCKERFILE'
 FROM node:22-bookworm
 
-# Install desktop packages for virtual display + VNC
+# Install desktop environment: display, VNC, window manager, terminal, browser
 RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    xvfb x11vnc websockify imagemagick xdg-utils && \
+    # Virtual display + VNC
+    xvfb x11vnc websockify imagemagick \
+    # Window manager + terminal
+    fluxbox xterm dbus-x11 \
+    # Browser
+    chromium chromium-sandbox \
+    # Fonts (so pages render properly)
+    fonts-liberation fonts-noto-cjk fonts-dejavu-core \
+    # Utilities
+    xdg-utils procps && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install OpenClaw from npm
@@ -107,6 +116,7 @@ EXPOSE 18789 18790 5900 6080
 WORKDIR /home/node
 ENV HOME=/home/node
 ENV NODE_ENV=production
+ENV DISPLAY=:99
 
 CMD ["openclaw", "gateway", "--allow-unconfigured"]
 DOCKERFILE

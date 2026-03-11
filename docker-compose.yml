@@ -28,17 +28,40 @@ services:
         Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
         sleep 2
 
-        # Start VNC server (no auth needed in container)
+        # Start window manager (fluxbox — lightweight)
+        fluxbox -display :99 &
+        sleep 1
+
+        # Start VNC server
         x11vnc -display :99 -nopw -noxdamage -shared -forever -rfbport 5900 -bg -o /tmp/x11vnc.log
 
-        # Start noVNC websocket proxy (plain proxy, no web files needed)
+        # Start noVNC websocket proxy
         websockify 6080 localhost:5900 &
 
-        # Start OpenClaw gateway
-        exec openclaw gateway \
+        # Start a terminal on the desktop
+        DISPLAY=:99 xterm -geometry 100x30+10+10 -fa 'Monospace' -fs 12 &
+
+        # Start OpenClaw gateway (headless, runs as API server)
+        openclaw gateway \
           --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
           --port 18789 \
-          --allow-unconfigured
+          --allow-unconfigured &
+        GATEWAY_PID=$!
+
+        # Wait for gateway to be ready, then open it in browser
+        sleep 3
+        DISPLAY=:99 chromium \
+          --no-sandbox \
+          --disable-gpu \
+          --disable-dev-shm-usage \
+          --no-first-run \
+          --disable-extensions \
+          --window-size=1260,680 \
+          --window-position=10,10 \
+          "http://localhost:18789" &
+
+        # Keep container alive — wait for gateway process
+        wait $GATEWAY_PID
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
