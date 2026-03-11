@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "start": "node scripts/monitor.js",
+    "test": "node tests/test-protocol.mjs",
     "health": "node scripts/health-check.js"
   },
   "engines": {

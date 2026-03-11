@@ -415,6 +415,21 @@ async function requestVLMAnalysis(instanceId, snapshotPath) {
 }
 
 /**
+ * Classify VLM response safety. Looks for explicit safety flags
+ * while avoiding false positives from negations like "No concerns".
+ */
+function classifyVlmSafety(content) {
+  const lower = content.toLowerCase();
+  // Positive safety phrases — always safe
+  const safePatterns = ['no concern', 'no issues', 'looks safe', 'nothing unusual', 'no problem'];
+  if (safePatterns.some(p => lower.includes(p))) return 'ok';
+  // Explicit flag keywords — only flag if present WITHOUT negation
+  const flagKeywords = ['warning:', 'unsafe', 'violation', 'unauthorized', 'suspicious', 'policy violation', 'sensitive data'];
+  if (flagKeywords.some(k => lower.includes(k))) return 'flagged';
+  return 'ok';
+}
+
+/**
  * Handle VLM query response from Aegis (received on stdin).
  */
 function handleQueryResponse(msg) {
@@ -434,7 +449,7 @@ function handleQueryResponse(msg) {
       status: 'active',
       ts: ts(),
       vlm_summary: msg.content,
-      vlm_safety: msg.content.toLowerCase().includes('concern') ? 'flagged' : 'ok',
+      vlm_safety: classifyVlmSafety(msg.content),
     });
   }
 }
