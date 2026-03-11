@@ -2,7 +2,7 @@
 setlocal enabledelayedexpansion
 
 REM CameraClaw Deploy Script (Windows)
-REM Installs Node.js dependencies and verifies Docker availability.
+REM Installs Node.js dependencies, verifies Docker, and prepares the OpenClaw image.
 
 echo ========================================
 echo        CameraClaw — Deploy
@@ -16,7 +16,6 @@ where node >nul 2>&1
 if %errorlevel% equ 0 (
     for /f "tokens=1 delims=v" %%v in ('node --version 2^>nul') do set "NODE_VER=%%v"
     for /f "tokens=1 delims=." %%m in ("!NODE_VER!") do set "NODE_MAJOR=%%m"
-    REM Strip the 'v' prefix if present
     set "NODE_MAJOR=!NODE_MAJOR:v=!"
     if !NODE_MAJOR! GEQ 18 (
         set "NODE_BIN=node"
@@ -34,7 +33,7 @@ REM ── npm Install ───────────────────
 
 echo.
 echo Installing dependencies...
-call npm install --production
+call npm install --omit=dev
 if %errorlevel% neq 0 (
     echo [ERROR] npm install failed
     exit /b 1
@@ -44,44 +43,65 @@ echo [OK] Dependencies installed
 REM ── Docker Detection ───────────────────
 
 echo.
-set "DOCKER_OK=false"
-set "COMPOSE_OK=false"
 
 where docker >nul 2>&1
-if %errorlevel% equ 0 (
-    docker info >nul 2>&1
-    if !errorlevel! equ 0 (
-        set "DOCKER_OK=true"
-        echo [OK] Docker: available and running
-    ) else (
-        echo [WARN] Docker: installed but daemon not running
-        echo    Start Docker Desktop
-    )
-) else (
-    echo [WARN] Docker: not installed
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker not installed
     echo    Install Docker Desktop from https://docker.com
+    exit /b 1
 )
 
+docker info >nul 2>&1
+if !errorlevel! neq 0 (
+    echo [ERROR] Docker daemon not running
+    echo    Start Docker Desktop
+    exit /b 1
+)
+echo [OK] Docker: available and running
+
 docker compose version >nul 2>&1
-if %errorlevel% equ 0 (
-    set "COMPOSE_OK=true"
-    echo [OK] Docker Compose: available
+if %errorlevel% neq 0 (
+    echo [ERROR] Docker Compose not available
+    exit /b 1
+)
+echo [OK] Docker Compose: available
+
+REM ── Prepare OpenClaw Config Directory ──
+
+echo.
+set "OPENCLAW_DIR=%USERPROFILE%\.openclaw"
+if not exist "!OPENCLAW_DIR!" (
+    echo Creating OpenClaw config directory: !OPENCLAW_DIR!
+    mkdir "!OPENCLAW_DIR!"
+    mkdir "!OPENCLAW_DIR!\workspace"
+)
+echo [OK] Config dir: !OPENCLAW_DIR!
+
+REM ── Pull OpenClaw Image ────────────────
+
+echo.
+echo Preparing OpenClaw Docker image...
+
+docker image inspect openclaw:local >nul 2>&1
+if !errorlevel! equ 0 (
+    echo [OK] OpenClaw image: openclaw:local ^(already built^)
 ) else (
-    echo [WARN] Docker Compose: not available
+    docker pull sharpai/openclaw:latest >nul 2>&1
+    if !errorlevel! equ 0 (
+        docker tag sharpai/openclaw:latest openclaw:local
+        echo [OK] OpenClaw image: pulled and tagged
+    ) else (
+        echo [WARN] OpenClaw image not available yet
+        echo    Build manually or ensure sharpai/openclaw:latest is on Docker Hub
+    )
 )
 
 REM ── Summary ─────────────────────────────
 
 echo.
 echo ========================================
-if "!DOCKER_OK!"=="true" if "!COMPOSE_OK!"=="true" (
-    echo [OK] CameraClaw ready ^(Docker mode^)
-    echo    Run: node scripts\monitor.js
-) else (
-    echo [WARN] CameraClaw ready ^(native mode - limited^)
-    echo    Install Docker for full container isolation.
-    echo    Run: node scripts\monitor.js
-)
+echo [OK] CameraClaw ready ^(Docker mode^)
+echo    Run: node scripts\monitor.js
 echo.
 echo Deploy complete.
 endlocal
