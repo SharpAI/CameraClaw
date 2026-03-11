@@ -1,0 +1,19 @@
+# Camera Claw — Default Configuration
+# These values match the defaults in SKILL.md and can be overridden
+# via the Aegis skill config panel.
+
+params:
+  auto_start: false
+  sandbox_mode: auto          # auto | docker | native
+  openclaw_version: latest
+  recording_mode: continuous  # continuous | activity | manual
+  clip_duration: 300          # seconds per clip
+  network_monitoring: true
+  alert_unknown_connections: true
+  audit_level: full           # full | summary
+
+  # OpenClaw gateway (maps to real docker-compose.yml env vars)
+  openclaw_config_dir: "~/.openclaw"      # Mounted as /home/node/.openclaw
+  openclaw_gateway_port: 18789            # Host port for first instance
+  openclaw_gateway_bind: loopback         # loopback | lan
+  # openclaw_gateway_token: ""            # Auto-generated if empty (secret)
