@@ -20,13 +20,6 @@ parameters:
     group: Lifecycle
 
   # ── Sandbox ────────────────────────────────────────────────────────────────
-  - name: sandbox_mode
-    label: "Sandbox Mode"
-    type: select
-    options: ["auto", "docker", "native"]
-    default: "auto"
-    description: "auto = Docker if available, else native subprocess. Docker provides full container isolation."
-    group: Sandbox
 
   - name: openclaw_version
     label: "OpenClaw Version"

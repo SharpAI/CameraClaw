@@ -20,7 +20,6 @@ import { join, resolve } from 'node:path';
 
 const DEFAULT_CONFIG = {
   auto_start: false,
-  sandbox_mode: 'auto',
   openclaw_version: 'latest',
   recording_mode: 'continuous',
   clip_duration: 300,
@@ -369,29 +368,32 @@ async function shutdown(config) {
 async function main() {
   const config = loadConfig();
 
-  // Check Docker availability
+  // Docker is required — no native fallback
   const dockerAvailable = isDockerAvailable();
   const composeAvailable = isDockerComposeAvailable();
-  const mode = !dockerAvailable ? 'native' :
-               config.sandbox_mode === 'native' ? 'native' : 'docker';
 
-  log(`Mode: ${mode} (docker: ${dockerAvailable}, compose: ${composeAvailable})`);
+  if (!dockerAvailable || !composeAvailable) {
+    const missing = !dockerAvailable ? 'Docker' : 'Docker Compose';
+    log(`${missing} is not available — CameraClaw requires Docker to run.`);
+    emit({
+      event: 'error',
+      message: `${missing} is required but not available. Install Docker and ensure the daemon is running.`,
+      retriable: false,
+    });
+    process.exit(1);
+  }
+
+  log('Docker: ready');
 
   emit({
     event: 'ready',
-    mode,
+    mode: 'docker',
     openclaw_version: config.openclaw_version,
     monitoring: config.network_monitoring,
-    docker_available: dockerAvailable,
-    compose_available: composeAvailable,
   });
 
-  if (mode !== 'docker') {
-    log('Docker not available — CameraClaw running in native mode (limited functionality)');
-  }
-
   // Auto-start default instance if configured
-  if (config.auto_start && mode === 'docker') {
+  if (config.auto_start) {
     await createInstance(config, 'default', 'Default Agent');
   }
 

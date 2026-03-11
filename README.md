@@ -61,7 +61,6 @@ Edit `config.yaml` or use the Aegis skill config panel:
 
 ```yaml
 params:
-  sandbox_mode: auto          # auto | docker | native
   openclaw_version: latest
   recording_mode: continuous  # continuous | activity | manual
   clip_duration: 300          # seconds per clip
