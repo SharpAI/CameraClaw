@@ -85,14 +85,35 @@ echo "🐳 Preparing OpenClaw Docker image..."
 if docker image inspect openclaw:local &>/dev/null 2>&1; then
     echo "✅ OpenClaw image: openclaw:local (already built)"
 else
-    # Try to pull from registry first
-    if docker pull sharpai/openclaw:latest 2>/dev/null; then
+    echo "   Image openclaw:local not found, building..."
+
+    # Find OpenClaw source — check env var and common locations
+    OPENCLAW_SRC="${OPENCLAW_REPO_PATH:-}"
+    if [ -z "$OPENCLAW_SRC" ]; then
+        for candidate in \
+            "/Users/Shared/workspace/openclaw" \
+            "${HOME}/openclaw" \
+            "${HOME}/Projects/openclaw" \
+            "$(dirname "$SCRIPT_DIR")/openclaw"; do
+            if [ -f "$candidate/Dockerfile" ]; then
+                OPENCLAW_SRC="$candidate"
+                break
+            fi
+        done
+    fi
+
+    if [ -n "$OPENCLAW_SRC" ] && [ -f "$OPENCLAW_SRC/Dockerfile" ]; then
+        echo "   Building from: $OPENCLAW_SRC"
+        docker build -t openclaw:local "$OPENCLAW_SRC"
+        echo "✅ OpenClaw image: built as openclaw:local"
+    elif docker pull sharpai/openclaw:latest 2>/dev/null; then
         docker tag sharpai/openclaw:latest openclaw:local
         echo "✅ OpenClaw image: pulled and tagged as openclaw:local"
     else
-        echo "⚠️  OpenClaw image not available yet"
-        echo "   Build it manually: cd /path/to/openclaw && docker build -t openclaw:local ."
-        echo "   Or ensure sharpai/openclaw:latest is available on Docker Hub"
+        echo "❌ Cannot build OpenClaw image"
+        echo "   Set OPENCLAW_REPO_PATH to the OpenClaw repo dir, or"
+        echo "   run: docker build -t openclaw:local /path/to/openclaw"
+        exit 1
     fi
 fi
 
