@@ -1,7 +1,7 @@
 ---
 name: camera-claw
 description: "Security camera for your AI agent — sandbox, record, and monitor OpenClaw"
-version: 1.1.0
+version: 2.0.0
 icon: assets/camera-claw-icon.png
 entry: scripts/monitor.js
 deploy: deploy.sh
@@ -46,6 +46,14 @@ parameters:
     description: "Length of each recording clip. Clips stored in Aegis media directory."
     group: Recording
 
+  - name: snapshot_fps
+    label: "Snapshot FPS"
+    type: select
+    options: [0.2, 0.5, 1, 2]
+    default: 0.5
+    description: "Periodic VNC snapshot rate. Lower = less CPU. Desktop changes slowly."
+    group: Recording
+
   # ── Monitoring ─────────────────────────────────────────────────────────────
   - name: network_monitoring
     label: "Network Monitoring"
@@ -61,20 +69,38 @@ parameters:
     description: "Flag connections to unrecognized IP addresses"
     group: Monitoring
 
-  - name: audit_level
-    label: "Audit Detail Level"
-    type: select
-    options: ["full", "summary"]
-    default: "full"
-    description: "full = log every event, summary = aggregate counts only"
+  - name: screen_change_threshold
+    label: "Screen Change Threshold (%)"
+    type: number
+    min: 5
+    max: 80
+    default: 20
+    description: "Minimum % pixel change to trigger a screen_change event. Lower = more sensitive."
     group: Monitoring
 
-  # ── OpenClaw Gateway (real env vars from docker-compose.yml) ───────────────
+  - name: vlm_analysis
+    label: "VLM Analysis"
+    type: select
+    options: ["off", "on_change", "periodic"]
+    default: "off"
+    description: "off = no VLM, on_change = on significant screen change, periodic = every N snapshots"
+    group: Monitoring
+
+  - name: vlm_interval
+    label: "VLM Analysis Interval"
+    type: number
+    min: 5
+    max: 300
+    default: 60
+    description: "Seconds between periodic VLM analyses (when vlm_analysis = periodic)"
+    group: Monitoring
+
+  # ── OpenClaw Gateway ───────────────────────────────────────────────────────
   - name: openclaw_config_dir
     label: "Config Directory"
     type: string
     default: "~/.openclaw"
-    description: "Path to OpenClaw config dir. Mounted into container as /home/node/.openclaw. Contains openclaw.json, .env, credentials."
+    description: "Path to OpenClaw config dir. Mounted into container."
     group: OpenClaw
 
   - name: openclaw_gateway_token
@@ -118,96 +144,178 @@ Security cameras watch people. Camera Claw watches AI agents. You wouldn't let a
 
 Camera Claw provides three layers:
 
-1. **The Room** — A clean sandbox (Docker container) to run OpenClaw
-2. **The Camera** — Records everything OpenClaw does: console, network, skills, channel messages
-3. **The DVR** — Playback, search, and alert rules for reviewing agent activity
-
-> **Note:** Recordings are stored in the standard Aegis media directory (`~/.aegis-ai/media/`). Retention and cleanup are handled by Aegis's built-in storage manager — no separate retention config needed.
+1. **The Room** — A Docker sandbox with a virtual desktop (Xvfb + Chrome) for OpenClaw
+2. **The Camera** — noVNC live view + periodic snapshots with metadata
+3. **The DVR** — Snapshot timeline with agent logs, network events, and optional VLM analysis
 
 ## Docker Architecture
 
-CameraClaw manages OpenClaw via `docker-compose.yml`. Each instance is an isolated stack:
+Each OpenClaw instance runs in an isolated Docker stack with a virtual desktop:
 
 | Service | Image | Purpose |
 |---------|-------|---------|
 | `openclaw-gateway` | `openclaw:local` | AI agent gateway + Control UI (port 18789) |
-| `openclaw-cli` | Same image | CLI for onboarding, channel setup, management |
+| `openclaw-cli` | Same image | CLI for onboarding, channel setup |
 
-**Single port = UI + Gateway** — OpenClaw serves its Control UI on the same port as the gateway. The webview URL IS the gateway URL (`http://localhost:<port>/`).
+Inside the container: **Xvfb** (virtual display :99) + **Chrome** + **x11vnc** (VNC server on :5900) + **websockify** (noVNC on :6080).
 
 ### Multi-Instance Support
 
-Each instance = separate docker-compose stack with unique env:
-- `OPENCLAW_GATEWAY_PORT` — unique host port per instance
-- `OPENCLAW_CONFIG_DIR` — isolated config at `~/.openclaw/instances/<id>/`
-- `OPENCLAW_GATEWAY_TOKEN` — unique auth token per instance
+Each instance = separate docker-compose stack with unique ports and config.
 
-## OpenClaw Configuration
-
-**OpenClaw has its own Config UI** — users configure model, channels, API keys, sandbox, and tools via the Control UI at `http://localhost:<port>/config` or by editing `~/.openclaw/openclaw.json` directly. CameraClaw does NOT duplicate this.
-
-CameraClaw controls only the Docker orchestration layer:
-
-| CameraClaw Parameter | OpenClaw Env Var | Purpose |
-|---------------------|------------------|---------|
-| `openclaw_config_dir` | volume mount → `/home/node/.openclaw` | Config directory |
-| `openclaw_gateway_token` | `OPENCLAW_GATEWAY_TOKEN` | Auth for Control UI |
-| `openclaw_gateway_port` | `OPENCLAW_GATEWAY_PORT` | Host port mapping |
-| `openclaw_gateway_bind` | `OPENCLAW_GATEWAY_BIND` | Network bind mode |
+---
 
 ## Protocol
 
 Communicates via **JSON lines** over stdin/stdout.
 
-### Camera Claw → Aegis (stdout)
+All events emitted by CameraClaw on stdout reach the Aegis frontend via `skill-response` in `skill-runtime-manager.cjs`. The frontend filters by `skillId === 'camera-claw'` and dispatches to the appropriate handler.
+
+CameraClaw can request Aegis services (LLM, VLM, system info) via the **inline query** protocol — no direct HTTP connection needed.
+
+### CameraClaw → Aegis (stdout events)
+
+#### Lifecycle Events
+
 ```jsonl
-{"event": "ready", "mode": "docker", "openclaw_version": "latest", "monitoring": true}
-{"event": "instance_started", "instance_id": "home", "gateway_url": "http://localhost:28001", "name": "Home Agent", "token": "abc123..."}
-{"event": "instance_stopped", "instance_id": "home"}
-{"event": "console", "timestamp": "...", "instance_id": "home", "stream": "stdout", "line": "Agent started"}
-{"event": "network", "timestamp": "...", "instance_id": "home", "remote_ip": "142.250.80.46", "remote_port": 443, "direction": "outbound"}
-{"event": "alert", "timestamp": "...", "instance_id": "home", "type": "unknown_connection", "detail": "Connection to 185.43.210.1:8080"}
-{"event": "health", "timestamp": "...", "instance_id": "home", "cpu_percent": 12.3, "memory_mb": 256, "uptime_seconds": 3600}
-{"event": "error", "message": "...", "retriable": true}
+{"event":"ready", "mode":"docker", "openclaw_version":"latest", "monitoring":true}
+{"event":"instance_started", "instance_id":"default", "gateway_url":"http://localhost:18789", "vnc_url":"ws://localhost:6080", "token":"abc123...", "name":"Default Agent"}
+{"event":"instance_stopped", "instance_id":"default", "reason":"user_request"}
+{"event":"error", "message":"Docker daemon not running", "retriable":false}
 ```
 
-### Aegis → Camera Claw (stdin)
+#### Desktop Monitoring Events
+
 ```jsonl
-{"command": "create_instance", "instance_id": "work", "name": "Work Agent"}
-{"command": "stop_instance", "instance_id": "work"}
-{"command": "list_instances"}
-{"command": "stop"}
-{"command": "pause_recording"}
-{"command": "resume_recording"}
+{"event":"vnc_ready", "instance_id":"default", "vnc_ws_url":"ws://localhost:6080", "view_only_url":"ws://localhost:6080?view_only=true"}
+{"event":"snapshot", "instance_id":"default", "path":"/abs/path/snap_001.jpg", "ts":"2026-03-11T14:00:05Z", "screen_diff_pct":42.3}
+{"event":"screen_change", "instance_id":"default", "diff_pct":42.3, "snapshot_path":"/abs/path/snap_002.jpg", "ts":"2026-03-11T14:00:07Z"}
+{"event":"activity_summary", "instance_id":"default", "status":"active", "ts":"2026-03-11T14:00:10Z", "vlm_summary":"Agent is composing a tweet about AI developments", "vlm_safety":"ok"}
+{"event":"idle", "instance_id":"default", "idle_since":"2026-03-11T14:10:00Z", "idle_seconds":120}
 ```
+
+#### Network & Console Events
+
+```jsonl
+{"event":"console", "instance_id":"default", "stream":"stdout", "line":"Agent started task: browse twitter", "ts":"..."}
+{"event":"network", "instance_id":"default", "remote_ip":"104.244.42.1", "domain":"twitter.com", "remote_port":443, "direction":"outbound", "ts":"..."}
+{"event":"alert", "instance_id":"default", "type":"unknown_connection", "detail":"Connection to 185.43.210.1:8080", "ts":"..."}
+{"event":"health", "instance_id":"default", "cpu_percent":12.3, "memory_mb":256, "uptime_seconds":3600, "ts":"..."}
+```
+
+#### Inline Queries (request Aegis services)
+
+CameraClaw can request VLM analysis from Aegis without direct HTTP:
+
+```jsonl
+{"query":"vlm_chat", "id":1, "messages":[{"role":"user","content":[{"type":"image_url","image_url":{"url":"data:image/jpeg;base64,..."}},{"type":"text","text":"Describe what the AI agent is doing on screen. Note any concerns."}]}], "max_tokens":256}
+```
+
+Aegis responds on stdin:
+```jsonl
+{"response":1, "ok":true, "content":"Agent is browsing twitter.com/home, scrolling through the feed. No concerns.", "model":"gemma-3-4b", "usage":{"prompt_tokens":800,"completion_tokens":45}}
+```
+
+### Aegis → CameraClaw (stdin commands)
+
+#### Instance Management
+
+```jsonl
+{"command":"create_instance", "instance_id":"work", "name":"Work Agent"}
+{"command":"stop_instance", "instance_id":"work"}
+{"command":"list_instances"}
+{"command":"stop"}
+```
+
+#### Recording Control
+
+```jsonl
+{"command":"pause_recording", "instance_id":"default"}
+{"command":"resume_recording", "instance_id":"default"}
+{"command":"take_snapshot", "instance_id":"default"}
+```
+
+#### Desktop Interaction
+
+```jsonl
+{"command":"analyze_screen", "instance_id":"default"}
+```
+
+> Triggers an immediate VLM analysis of the current screen. CameraClaw captures a snapshot, sends a `vlm_chat` query to Aegis, and emits an `activity_summary` event with the result.
+
+#### Non-command messages
+
+Messages without a `command` field (e.g. detection frame events from other skills) are **silently ignored**.
+
+---
+
+## Aegis Frontend Integration
+
+### Monitor View (Camera Grid)
+
+The OpenClaw desktop appears as a camera tile using **noVNC in view-only mode**:
+
+```javascript
+// Frontend: connect noVNC with viewOnly=true for monitor tile
+const vnc = new RFB(tileElement, vncWsUrl, { viewOnly: true });
+```
+
+- Live desktop stream, scaled to thumbnail
+- Click tile → opens OpenClaw Panel (switches to interactive)
+- Motion indicator when `screen_change` events arrive
+
+### OpenClaw Panel (Sidebar)
+
+Full interactive noVNC session:
+
+```javascript
+// Frontend: connect noVNC with full interaction for panel
+const vnc = new RFB(panelElement, vncWsUrl, { viewOnly: false });
+```
+
+- Full mouse/keyboard control
+- Used for onboarding, configuration, manual intervention
+
+### Recording Pipeline
+
+CameraClaw handles recording internally:
+
+1. **Periodic snapshots** at `snapshot_fps` rate (default 0.5 fps)
+2. **Screen diff** between consecutive snapshots
+3. If diff > `screen_change_threshold` → emit `screen_change` event
+4. **Metadata enrichment**: each snapshot paired with agent logs + network events
+5. **VLM analysis** (if enabled): triggered on significant changes or periodically
+6. **Storage**: snapshots + JSONL metadata in `~/.aegis-ai/media/camera-claw/<instance_id>/`
+
+### Snapshot Timeline Format
+
+```
+~/.aegis-ai/media/camera-claw/default/
+├── 2026-03-11/
+│   ├── snaps/
+│   │   ├── 14-00-01.jpg
+│   │   ├── 14-00-03.jpg
+│   │   └── 14-00-05.jpg
+│   └── timeline.jsonl      ← enriched metadata per snapshot
+```
+
+Each line in `timeline.jsonl`:
+```jsonl
+{"ts":"2026-03-11T14:00:01Z", "snap":"snaps/14-00-01.jpg", "diff_pct":0, "agent_log":"Browsing feed", "network":[{"domain":"twitter.com","bytes":45200}]}
+{"ts":"2026-03-11T14:00:05Z", "snap":"snaps/14-00-05.jpg", "diff_pct":42.3, "agent_log":"Composing tweet", "vlm":"Agent composing tweet about AI", "vlm_safety":"ok"}
+```
+
+---
 
 ## Installation
 
-The `deploy.sh` / `deploy.bat` bootstrapper handles everything:
-
 ```bash
-./deploy.sh
+./deploy.sh    # Node.js deps + Docker image pull + config dir setup
 ```
 
 1. Checks for Node.js ≥18
 2. Runs `npm install`
-3. Detects Docker and Docker Compose
-4. Pulls OpenClaw Docker image (if Docker is available)
-
-## Configuration
-
-All parameters can be set via the Aegis skill config panel or `config.yaml`:
-
-```yaml
-params:
-  sandbox_mode: auto
-  recording_mode: continuous
-  clip_duration: 300
-  network_monitoring: true
-  alert_unknown_connections: true
-  audit_level: full
-  # OpenClaw gateway
-  openclaw_config_dir: "~/.openclaw"
-  openclaw_gateway_port: 18789
-  openclaw_gateway_bind: loopback
-```
+3. Verifies Docker and Docker Compose
+4. Creates `~/.openclaw/` config directory
+5. Pulls/builds OpenClaw Docker image
+6. Validates `docker-compose.yml`
