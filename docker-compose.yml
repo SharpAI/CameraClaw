@@ -1,6 +1,6 @@
 # CameraClaw — OpenClaw Docker Compose
 # Manages OpenClaw instances with virtual desktop for monitoring.
-# Env vars are set by monitor.js per instance.
+# The openclaw:local image is built by deploy.sh with desktop packages included.
 
 services:
   openclaw-gateway:
@@ -20,19 +20,10 @@ services:
       - "${OPENCLAW_NOVNC_PORT:-6080}:6080"
     init: true
     restart: unless-stopped
-    user: root
     shm_size: "512m"
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        # Install desktop packages if not already present
-        if ! command -v Xvfb >/dev/null 2>&1; then
-          apt-get update -qq && \
-          DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-            xvfb x11vnc websockify imagemagick xdg-utils >/dev/null 2>&1
-          rm -rf /var/lib/apt/lists/*
-        fi
-
         # Start virtual display
         Xvfb :99 -screen 0 1280x720x24 -ac &
         sleep 1
@@ -43,10 +34,10 @@ services:
         # Start noVNC websocket proxy
         websockify --web /usr/share/novnc 6080 localhost:5900 &
 
-        # Drop back to node user for the gateway
-        exec su -s /bin/sh node -c "node dist/index.js gateway \
-          --bind ${OPENCLAW_GATEWAY_BIND:-lan} \
-          --port 18789"
+        # Start OpenClaw gateway
+        exec openclaw gateway \
+          --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
+          --port 18789
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
@@ -61,4 +52,4 @@ services:
     stdin_open: true
     tty: true
     init: true
-    entrypoint: ["node", "dist/index.js"]
+    entrypoint: ["openclaw"]

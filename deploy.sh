@@ -85,34 +85,40 @@ echo "🐳 Preparing OpenClaw Docker image..."
 if docker image inspect openclaw:local &>/dev/null 2>&1; then
     echo "✅ OpenClaw image: openclaw:local (already built)"
 else
-    echo "   Image openclaw:local not found, building..."
+    echo "   Image openclaw:local not found — building from npm..."
 
-    # Find OpenClaw source — check env var and common locations
-    OPENCLAW_SRC="${OPENCLAW_REPO_PATH:-}"
-    if [ -z "$OPENCLAW_SRC" ]; then
-        for candidate in \
-            "/Users/Shared/workspace/openclaw" \
-            "${HOME}/openclaw" \
-            "${HOME}/Projects/openclaw" \
-            "$(dirname "$SCRIPT_DIR")/openclaw"; do
-            if [ -f "$candidate/Dockerfile" ]; then
-                OPENCLAW_SRC="$candidate"
-                break
-            fi
-        done
-    fi
+    # Generate a Dockerfile that installs OpenClaw from npm + desktop packages
+    TMPDIR_BUILD=$(mktemp -d)
+    cat > "$TMPDIR_BUILD/Dockerfile" << 'DOCKERFILE'
+FROM node:22-bookworm
 
-    if [ -n "$OPENCLAW_SRC" ] && [ -f "$OPENCLAW_SRC/Dockerfile" ]; then
-        echo "   Building from: $OPENCLAW_SRC"
-        docker build -t openclaw:local "$OPENCLAW_SRC"
-        echo "✅ OpenClaw image: built as openclaw:local"
-    elif docker pull sharpai/openclaw:latest 2>/dev/null; then
-        docker tag sharpai/openclaw:latest openclaw:local
-        echo "✅ OpenClaw image: pulled and tagged as openclaw:local"
+# Install desktop packages for virtual display + VNC
+RUN apt-get update -qq && \
+    DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
+    xvfb x11vnc websockify imagemagick xdg-utils && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
+
+# Install OpenClaw from npm
+RUN npm install -g openclaw@latest
+
+# Expose ports: gateway, bridge, VNC, noVNC
+EXPOSE 18789 18790 5900 6080
+
+WORKDIR /home/node
+ENV HOME=/home/node
+ENV NODE_ENV=production
+
+CMD ["openclaw", "gateway", "--allow-unconfigured"]
+DOCKERFILE
+
+    echo "   Building openclaw:local (npm install + desktop packages)..."
+    docker build -t openclaw:local "$TMPDIR_BUILD"
+    rm -rf "$TMPDIR_BUILD"
+
+    if docker image inspect openclaw:local &>/dev/null 2>&1; then
+        echo "✅ OpenClaw image: openclaw:local (built from npm)"
     else
-        echo "❌ Cannot build OpenClaw image"
-        echo "   Set OPENCLAW_REPO_PATH to the OpenClaw repo dir, or"
-        echo "   run: docker build -t openclaw:local /path/to/openclaw"
+        echo "❌ Failed to build OpenClaw image"
         exit 1
     fi
 fi
