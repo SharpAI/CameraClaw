@@ -25,19 +25,20 @@ services:
     command:
       - |
         # Start virtual display
-        Xvfb :99 -screen 0 1280x720x24 -ac &
-        sleep 1
+        Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
+        sleep 2
 
-        # Start VNC server (no password, shared mode for multiple viewers)
-        x11vnc -display :99 -nopw -shared -forever -rfbport 5900 -bg
+        # Start VNC server (no auth needed in container)
+        x11vnc -display :99 -nopw -noxdamage -shared -forever -rfbport 5900 -bg -o /tmp/x11vnc.log
 
-        # Start noVNC websocket proxy
-        websockify --web /usr/share/novnc 6080 localhost:5900 &
+        # Start noVNC websocket proxy (plain proxy, no web files needed)
+        websockify 6080 localhost:5900 &
 
         # Start OpenClaw gateway
         exec openclaw gateway \
           --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
-          --port 18789
+          --port 18789 \
+          --allow-unconfigured
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
