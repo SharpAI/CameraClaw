@@ -12,6 +12,8 @@
     "node": ">=18"
   },
   "dependencies": {
+    "pixelmatch": "^7.1.0",
+    "pngjs": "^7.0.0",
     "yaml": "^2.4.0"
   }
 }

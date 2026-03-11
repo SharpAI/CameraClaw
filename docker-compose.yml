@@ -1,4 +1,5 @@
 # CameraClaw — OpenClaw Docker Compose
+# Manages OpenClaw instances with virtual desktop for monitoring.
 # Env vars are set by monitor.js per instance.
 
 services:
@@ -7,6 +8,7 @@ services:
     environment:
       HOME: /home/node
       TERM: xterm-256color
+      DISPLAY: ":99"
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
@@ -14,18 +16,28 @@ services:
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+      - "${OPENCLAW_VNC_PORT:-5900}:5900"
+      - "${OPENCLAW_NOVNC_PORT:-6080}:6080"
     init: true
     restart: unless-stopped
+    shm_size: "512m"
+    entrypoint: ["/bin/sh", "-c"]
     command:
-      [
-        "node",
-        "dist/index.js",
-        "gateway",
-        "--bind",
-        "${OPENCLAW_GATEWAY_BIND:-lan}",
-        "--port",
-        "18789",
-      ]
+      - |
+        # Start virtual display
+        Xvfb :99 -screen 0 1280x720x24 -ac &
+        sleep 1
+
+        # Start VNC server (no password, shared mode for multiple viewers)
+        x11vnc -display :99 -nopw -shared -forever -rfbport 5900 &
+
+        # Start noVNC websocket proxy
+        websockify --web /usr/share/novnc 6080 localhost:5900 &
+
+        # Start OpenClaw gateway
+        exec node dist/index.js gateway \
+          --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
+          --port 18789
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
