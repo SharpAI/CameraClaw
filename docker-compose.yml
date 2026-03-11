@@ -41,15 +41,23 @@ services:
         # Start a terminal on the desktop
         DISPLAY=:99 xterm -geometry 100x30+10+10 -fa 'Monospace' -fs 12 &
 
-        # Start OpenClaw gateway (headless, runs as API server)
+        # Start OpenClaw gateway in background
         openclaw gateway \
-          --bind "${OPENCLAW_GATEWAY_BIND:-lan}" \
+          --bind "${OPENCLAW_GATEWAY_BIND:-loopback}" \
           --port 18789 \
           --allow-unconfigured &
-        GATEWAY_PID=$!
 
-        # Wait for gateway to be ready, then open it in browser
-        sleep 3
+        # Wait for gateway to be ready
+        echo "Waiting for OpenClaw gateway..."
+        for i in 1 2 3 4 5 6 7 8 9 10; do
+          if curl -sf http://localhost:18789 >/dev/null 2>&1; then
+            echo "Gateway ready!"
+            break
+          fi
+          sleep 2
+        done
+
+        # Open gateway in browser
         DISPLAY=:99 chromium \
           --no-sandbox \
           --disable-gpu \
@@ -60,8 +68,8 @@ services:
           --window-position=10,10 \
           "http://localhost:18789" &
 
-        # Keep container alive — wait for gateway process
-        wait $GATEWAY_PID
+        # Keep container alive
+        wait
 
   openclaw-cli:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
