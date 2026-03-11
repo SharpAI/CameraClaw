@@ -366,6 +366,25 @@ async function shutdown(config) {
 }
 
 async function main() {
+  // Handle --help without starting the daemon
+  if (process.argv.includes('--help') || process.argv.includes('-h')) {
+    console.log(`CameraClaw Monitor — OpenClaw Docker Orchestrator
+
+Usage:
+  node scripts/monitor.js           Start the monitor daemon
+  node scripts/monitor.js --help    Show this help
+
+Requires Docker and Docker Compose to be installed and running.
+Communicates via JSONL over stdin/stdout.
+
+Environment:
+  AEGIS_SKILL_PARAMS    JSON object of skill parameters (from Aegis)
+  OPENCLAW_REPO_PATH    Path to local OpenClaw repo (optional)
+
+See SKILL.md for full parameter documentation.`);
+    process.exit(0);
+  }
+
   const config = loadConfig();
 
   // Docker is required — no native fallback

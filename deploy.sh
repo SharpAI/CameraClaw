@@ -41,7 +41,7 @@ npm install --production 2>&1
 
 echo "✅ Dependencies installed"
 
-# ── Docker Detection ──────────────────────────────────────────────────────────
+# ── Docker Detection (REQUIRED) ───────────────────────────────────────────────
 
 echo ""
 DOCKER_OK=false
@@ -52,34 +52,38 @@ if command -v docker &>/dev/null; then
         DOCKER_OK=true
         echo "✅ Docker: available and running"
     else
-        echo "⚠️  Docker: installed but daemon not running"
+        echo "❌ Docker: installed but daemon not running"
         echo "   Start Docker Desktop or: sudo systemctl start docker"
+        echo ""
+        echo "CameraClaw requires Docker. Cannot proceed."
+        exit 1
     fi
 else
-    echo "⚠️  Docker: not installed"
+    echo "❌ Docker: not installed"
     echo "   macOS: brew install --cask docker"
     echo "   Linux: sudo apt-get install docker.io"
+    echo ""
+    echo "CameraClaw requires Docker. Cannot proceed."
+    exit 1
 fi
 
 if docker compose version &>/dev/null 2>&1; then
     COMPOSE_OK=true
     echo "✅ Docker Compose: available"
 else
-    echo "⚠️  Docker Compose: not available"
+    echo "❌ Docker Compose: not available"
+    echo "   Docker Compose v2 is required (ships with Docker Desktop)."
+    echo ""
+    echo "CameraClaw requires Docker Compose. Cannot proceed."
+    exit 1
 fi
 
 # ── Summary ────────────────────────────────────────────────────────────────────
 
 echo ""
 echo "────────────────────────────────────────────"
-if [ "$DOCKER_OK" = true ] && [ "$COMPOSE_OK" = true ]; then
-    echo "✅ CameraClaw ready (Docker mode)"
-    echo "   Run: $NODE_BIN scripts/monitor.js"
-else
-    echo "⚠️  CameraClaw ready (native mode — limited functionality)"
-    echo "   Install Docker for full container isolation."
-    echo "   Run: $NODE_BIN scripts/monitor.js"
-fi
+echo "✅ CameraClaw ready (Docker mode)"
+echo "   Run: $NODE_BIN scripts/monitor.js"
 
 echo ""
 echo "Deploy complete."
