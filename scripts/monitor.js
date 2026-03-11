@@ -19,7 +19,7 @@ import { join, resolve } from 'node:path';
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG = {
-  auto_start: false,
+  auto_start: true,
   openclaw_version: 'latest',
   recording_mode: 'continuous',
   clip_duration: 300,

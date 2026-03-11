@@ -15,7 +15,7 @@ parameters:
   - name: auto_start
     label: "Auto Start"
     type: boolean
-    default: false
+    default: true
     description: "Start CameraClaw automatically when Aegis launches"
     group: Lifecycle
 

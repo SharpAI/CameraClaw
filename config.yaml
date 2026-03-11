@@ -3,7 +3,7 @@
 # via the Aegis skill config panel.
 
 params:
-  auto_start: false
+  auto_start: true
   openclaw_version: latest
   recording_mode: continuous  # continuous | activity | manual
   clip_duration: 300          # seconds per clip
