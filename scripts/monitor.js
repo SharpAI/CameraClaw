@@ -157,6 +157,7 @@ function usedPorts() {
   for (const inst of instances.values()) {
     ports.add(inst.port);
     ports.add(inst.port + 1); // bridge
+    ports.add(inst.vncPort);
     ports.add(inst.novncPort);
   }
   return ports;
@@ -548,20 +549,19 @@ async function createInstance(config, instanceId, name) {
   const workspaceDir = join(configDir, 'workspace');
 
   // Find available ports dynamically
-  let port, novncPort;
+  let port, vncPort, novncPort;
   try {
     port = await findAvailablePort(config.openclaw_gateway_port, used);
     used.add(port);
     used.add(port + 1);
+    vncPort = await findAvailablePort(5900, used);
+    used.add(vncPort);
     novncPort = await findAvailablePort(6080, used);
   } catch (err) {
     log(`No available ports for instance "${instanceId}": ${err.message}`);
     emit({ event: 'error', message: `No available ports: ${err.message}`, retriable: false });
     return null;
   }
-
-  // VNC port is internal only (not exposed to host)
-  const vncPort = 5900;
 
   mkdirSync(configDir, { recursive: true });
   mkdirSync(workspaceDir, { recursive: true });
