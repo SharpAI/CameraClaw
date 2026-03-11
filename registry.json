@@ -1,0 +1,46 @@
+{
+  "version": "1.0.0",
+  "repository": "SharpAI/CameraClaw",
+  "url": "https://github.com/SharpAI/CameraClaw",
+  "updated": "2026-03-11",
+  "description": "Security camera for your AI agent — sandbox, record, and monitor OpenClaw activity.",
+  "categories": {
+    "integrations": "Smart home and IoT platform bridges"
+  },
+  "skills": [
+    {
+      "id": "camera-claw",
+      "name": "Camera Claw",
+      "description": "Security camera for your AI agent — sandbox, record, and monitor OpenClaw activity.",
+      "version": "1.1.0",
+      "category": "integrations",
+      "url": "https://github.com/SharpAI/CameraClaw",
+      "repo_url": "https://github.com/SharpAI/CameraClaw",
+      "code_structure": [
+        { "path": "SKILL.md", "desc": "Aegis skill manifest (11 params)" },
+        { "path": "package.json", "desc": "Node.js dependencies" },
+        { "path": "config.yaml", "desc": "Default params" },
+        { "path": "deploy.sh", "desc": "Node.js + Docker bootstrapper" },
+        { "path": "deploy.bat", "desc": "Windows bootstrapper" },
+        { "path": "scripts/monitor.js", "desc": "Main entry — Docker orchestrator + JSONL protocol" },
+        { "path": "scripts/health-check.js", "desc": "Container health checker" },
+        { "path": "docs/aegis_openclaw_note.md", "desc": "Aegis integration requirements" }
+      ],
+      "tags": ["security", "sandbox", "monitoring", "openclaw", "ai-agent"],
+      "platforms": [
+        "linux-x64",
+        "linux-arm64",
+        "darwin-arm64",
+        "darwin-x64",
+        "win-x64"
+      ],
+      "requirements": {
+        "docker": true
+      },
+      "capabilities": [
+        "monitoring",
+        "recording"
+      ]
+    }
+  ]
+}
