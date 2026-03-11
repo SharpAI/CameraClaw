@@ -322,20 +322,25 @@ function startHealthLoop(intervalMs = 30000) {
 // ─── Stdin Command Handler ───────────────────────────────────────────────────
 
 function handleCommand(config, line) {
-  let cmd;
+  let msg;
   try {
-    cmd = JSON.parse(line);
+    msg = JSON.parse(line);
   } catch {
     log(`Invalid JSON on stdin: ${line}`);
     return;
   }
 
-  switch (cmd.command) {
+  // Ignore non-command messages (e.g. detection frames from Aegis pipeline)
+  if (!msg.command) {
+    return;
+  }
+
+  switch (msg.command) {
     case 'create_instance':
-      createInstance(config, cmd.instance_id || 'default', cmd.name);
+      createInstance(config, msg.instance_id || 'default', msg.name);
       break;
     case 'stop_instance':
-      stopInstance(config, cmd.instance_id);
+      stopInstance(config, msg.instance_id);
       break;
     case 'list_instances':
       listInstances();
@@ -350,8 +355,8 @@ function handleCommand(config, line) {
       log('Recording resumed (placeholder)');
       break;
     default:
-      log(`Unknown command: ${cmd.command}`);
-      emit({ event: 'error', message: `Unknown command: ${cmd.command}`, retriable: false });
+      log(`Unknown command: ${msg.command}`);
+      emit({ event: 'error', message: `Unknown command: ${msg.command}`, retriable: false });
   }
 }
 
