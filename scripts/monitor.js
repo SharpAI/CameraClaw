@@ -5,7 +5,7 @@
  *
  * Manages OpenClaw container instances with virtual desktops (Xvfb + Chrome).
  * Provides:
- *   - noVNC live view (view-only for Monitor, interactive for Panel)
+ *   - KasmVNC live view (view-only for Monitor, interactive for Panel)
  *   - Periodic VNC snapshots with screen-diff detection
  *   - VLM analysis via Aegis inline query protocol
  *   - Enriched timeline (snapshot + agent logs + network metadata)
@@ -178,8 +178,7 @@ function usedPorts() {
   for (const inst of instances.values()) {
     ports.add(inst.port);
     ports.add(inst.port + 1); // bridge
-    ports.add(inst.vncPort);
-    ports.add(inst.novncPort);
+    ports.add(inst.kasmPort);
   }
   return ports;
 }
@@ -532,8 +531,7 @@ function handleQueryResponse(msg) {
  * @property {string} id
  * @property {string} name
  * @property {number} port
- * @property {number} vncPort
- * @property {number} novncPort
+ * @property {number} kasmPort
  * @property {string} token
  * @property {string} configDir
  * @property {import('node:child_process').ChildProcess|null} process
@@ -560,8 +558,7 @@ function buildComposeEnv(instanceId) {
     ...process.env,
     OPENCLAW_GATEWAY_PORT: String(instance.port),
     OPENCLAW_BRIDGE_PORT: String(instance.port + 1),
-    OPENCLAW_VNC_PORT: String(instance.vncPort),
-    OPENCLAW_NOVNC_PORT: String(instance.novncPort),
+    OPENCLAW_KASMVNC_PORT: String(instance.kasmPort),
     OPENCLAW_CONFIG_DIR: instance.configDir,
     OPENCLAW_WORKSPACE_DIR: join(instance.configDir, 'workspace'),
     OPENCLAW_GATEWAY_TOKEN: instance.token,
@@ -576,14 +573,12 @@ async function createInstance(config, instanceId, name) {
   const workspaceDir = join(configDir, 'workspace');
 
   // Find available ports dynamically
-  let port, vncPort, novncPort;
+  let port, kasmPort;
   try {
     port = await findAvailablePort(config.openclaw_gateway_port, used);
     used.add(port);
     used.add(port + 1);
-    vncPort = await findAvailablePort(5900, used);
-    used.add(vncPort);
-    novncPort = await findAvailablePort(6080, used);
+    kasmPort = await findAvailablePort(6080, used);
   } catch (err) {
     log(`No available ports for instance "${instanceId}": ${err.message}`);
     emit({ event: 'error', message: `No available ports: ${err.message}`, retriable: false });
@@ -606,8 +601,7 @@ async function createInstance(config, instanceId, name) {
     id: instanceId,
     name: name || instanceId,
     port,
-    vncPort,
-    novncPort,
+    kasmPort,
     token,
     configDir,
     process: null,
@@ -623,8 +617,7 @@ async function createInstance(config, instanceId, name) {
     ...process.env,
     OPENCLAW_GATEWAY_PORT: String(port),
     OPENCLAW_BRIDGE_PORT: String(port + 1),
-    OPENCLAW_VNC_PORT: String(vncPort),
-    OPENCLAW_NOVNC_PORT: String(novncPort),
+    OPENCLAW_KASMVNC_PORT: String(kasmPort),
     OPENCLAW_CONFIG_DIR: configDir,
     OPENCLAW_WORKSPACE_DIR: workspaceDir,
     OPENCLAW_GATEWAY_TOKEN: token,
@@ -632,7 +625,7 @@ async function createInstance(config, instanceId, name) {
     OPENCLAW_IMAGE: `openclaw:${config.openclaw_version || 'local'}`,
   };
 
-  log(`Starting instance "${instanceId}" on port ${port} (VNC:${vncPort}, noVNC:${novncPort})`);
+  log(`Starting instance "${instanceId}" on port ${port} (KasmVNC:${kasmPort})`);
 
   try {
     const child = spawn('docker', ['compose', '-f', composeFile, 'up', '-d', 'openclaw-gateway'], {
@@ -657,30 +650,27 @@ async function createInstance(config, instanceId, name) {
       ? `http://0.0.0.0:${port}`
       : `http://localhost:${port}`;
 
-    const vncWsUrl = `ws://localhost:${novncPort}`;
-    const novncUrl = `http://localhost:${novncPort}/vnc.html?autoconnect=true`;
+    const kasmvncUrl = `http://localhost:${kasmPort}`;
 
-    // Emit instance_started with VNC info
+    // Emit instance_started with KasmVNC info
     emit({
       event: 'instance_started',
       instance_id: instanceId,
       gateway_url: gatewayUrl,
-      vnc_url: vncWsUrl,
-      novnc_url: novncUrl,
+      kasmvnc_url: kasmvncUrl,
       name: instance.name,
       token,
     });
 
-    // Wait a moment for VNC services to initialize
+    // Wait a moment for KasmVNC to initialize
     await new Promise(r => setTimeout(r, 3000));
 
     // Emit vnc_ready
     emit({
       event: 'vnc_ready',
       instance_id: instanceId,
-      vnc_ws_url: vncWsUrl,
-      novnc_url: novncUrl,
-      view_only_url: `${vncWsUrl}?view_only=true`,
+      kasmvnc_url: kasmvncUrl,
+      view_only_url: `${kasmvncUrl}/?viewOnly=true`,
     });
 
     // Start the snapshot pipeline (if recording is enabled and fps > 0)
@@ -688,9 +678,9 @@ async function createInstance(config, instanceId, name) {
       startSnapshotLoop(config, instanceId);
     }
 
-    log(`Instance "${instanceId}" started at ${gatewayUrl} (noVNC: ${vncWsUrl})`);
+    log(`Instance "${instanceId}" started at ${gatewayUrl} (KasmVNC: ${kasmvncUrl})`);
     log(`  Gateway: ${gatewayUrl}?token=${instance.token}`);
-    log(`  noVNC:   ${novncUrl}`);
+    log(`  KasmVNC: ${kasmvncUrl}`);
     return instance;
 
   } catch (err) {
@@ -741,11 +731,10 @@ function listInstances() {
     instance_id: inst.id,
     name: inst.name,
     port: inst.port,
-    vnc_port: inst.vncPort,
-    novnc_port: inst.novncPort,
+    kasm_port: inst.kasmPort,
     status: inst.status,
     gateway_url: `http://localhost:${inst.port}`,
-    vnc_ws_url: `ws://localhost:${inst.novncPort}`,
+    kasmvnc_url: `http://localhost:${inst.kasmPort}`,
   }));
 
   emit({ event: 'instance_list', instances: list });
@@ -914,7 +903,7 @@ Usage:
 
 Features:
   - Virtual desktop (Xvfb + Chrome) inside Docker
-  - noVNC live view (view-only for Monitor, interactive for Panel)
+  - KasmVNC live view (view-only for Monitor, interactive for Panel)
   - Periodic VNC snapshots with screen-diff detection
   - VLM analysis via Aegis inline query protocol
   - Enriched timeline (snapshot + agent logs + network metadata)

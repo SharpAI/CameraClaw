@@ -8,7 +8,7 @@ CameraClaw is a skill (process managed by `skill-runtime-manager.cjs`) that orch
 
 Aegis needs:
 1. **IPC handlers** for CameraClaw-specific events
-2. **noVNC integration** in two places (Monitor View + OpenClaw Panel)
+2. **KasmVNC integration** in two places (Monitor View + OpenClaw Panel)
 3. **Snapshot storage** in the media directory
 
 ## Architecture
@@ -18,13 +18,13 @@ CameraClaw (Node.js)                    Aegis-AI
 ┌────────────────────────┐             ┌──────────────────────────────┐
 │ Manages Docker stack:  │   stdout    │ skill-runtime-manager.cjs    │
 │  - Xvfb + Chrome       │──(JSONL)──→│  → emit('skill-response')    │
-│  - x11vnc + websockify │             │  → IPC to renderer           │
+│  - KasmVNC             │             │  → IPC to renderer           │
 │  - OpenClaw gateway    │   stdin     │                               │
 │                        │←─(JSONL)───│ Commands from frontend/agent  │
 │ Takes snapshots        │             │                               │
 │ Detects screen changes │             │ Frontend:                     │
-│ Requests VLM analysis  │             │  - Monitor tile (noVNC RO)    │
-│                        │             │  - OpenClaw Panel (noVNC RW)  │
+│ Requests VLM analysis  │             │  - Monitor tile (KasmVNC RO)  │
+│                        │             │  - OpenClaw Panel (KasmVNC RW)│
 └────────────────────────┘             └──────────────────────────────┘
 ```
 
@@ -35,10 +35,10 @@ CameraClaw (Node.js)                    Aegis-AI
 | Event | Data | Frontend Action |
 |-------|------|-----------------|
 | `ready` | `mode, openclaw_version, monitoring` | Show CameraClaw as active in Console |
-| `instance_started` | `instance_id, gateway_url, vnc_url, token, name` | Register VNC connection, enable Monitor tile, inject token into gateway webview sessionStorage |
-| `instance_stopped` | `instance_id, reason` | Disconnect VNC, remove tile |
-| `vnc_ready` | `instance_id, vnc_ws_url, view_only_url` | Connect noVNC to Monitor tile (view-only) and make OpenClaw Panel available |
-| `snapshot` | `instance_id, path, ts, screen_diff_pct` | Update thumbnail in Monitor tile (if noVNC not connected) |
+| `instance_started` | `instance_id, gateway_url, kasmvnc_url, token, name` | Register KasmVNC connection, enable Monitor tile, inject token into gateway webview sessionStorage |
+| `instance_stopped` | `instance_id, reason` | Disconnect KasmVNC iframe, remove tile |
+| `vnc_ready` | `instance_id, kasmvnc_url, view_only_url` | Connect KasmVNC iframe to Monitor tile (view-only) and make OpenClaw Panel available |
+| `snapshot` | `instance_id, path, ts, screen_diff_pct` | Update thumbnail in Monitor tile (if KasmVNC not connected) |
 | `screen_change` | `instance_id, diff_pct, snapshot_path, ts` | Flash motion indicator on Monitor tile |
 | `activity_summary` | `instance_id, status, vlm_summary, vlm_safety, ts` | Show summary in panel overlay or notification |
 | `idle` | `instance_id, idle_since, idle_seconds` | Show idle badge on Monitor tile |
@@ -61,40 +61,38 @@ CameraClaw (Node.js)                    Aegis-AI
 | `take_snapshot` | `instance_id` | Manual snapshot request |
 | `analyze_screen` | `instance_id` | Trigger immediate VLM analysis |
 
-## Frontend: noVNC Integration
-
-### Dependencies
-
-```bash
-npm install @novnc/novnc
-# or load from CDN: https://cdn.jsdelivr.net/npm/@novnc/novnc/lib/rfb.js
-```
+## Frontend: KasmVNC Integration
 
 ### Monitor View (Camera Grid Tile)
 
-```javascript
-import RFB from '@novnc/novnc/lib/rfb.js';
+KasmVNC is embedded via an **iframe** with view-only mode:
 
+```javascript
 // On instance_started / vnc_ready event:
-const vnc = new RFB(tileElement, event.vnc_ws_url, {
-  viewOnly: true,     // Read-only: no mouse/keyboard sent
-  scaleViewport: true, // Scale to tile size
-  background: '#1a1a2e',
-});
+const iframe = document.createElement('iframe');
+iframe.src = `${event.view_only_url}`;  // http://localhost:6080/?viewOnly=true
+iframe.style.width = '100%';
+iframe.style.height = '100%';
+iframe.style.border = 'none';
+tileElement.appendChild(iframe);
 
 // On instance_stopped:
-vnc.disconnect();
+iframe.remove();
 ```
 
 ### OpenClaw Panel (Sidebar Tab)
 
+Full interactive KasmVNC session:
+
 ```javascript
 // When user clicks tile or OpenClaw sidebar icon:
-const vnc = new RFB(panelElement, event.vnc_ws_url, {
-  viewOnly: false,    // Full interaction
-  scaleViewport: true,
-  resizeSession: true,
-});
+const iframe = document.createElement('iframe');
+iframe.src = event.kasmvnc_url;  // http://localhost:6080 (interactive)
+iframe.style.width = '100%';
+iframe.style.height = '100%';
+iframe.style.border = 'none';
+iframe.allow = 'clipboard-read; clipboard-write';  // Enable clipboard sharing
+panelElement.appendChild(iframe);
 
 // User can click, type, onboard, configure
 ```
@@ -133,8 +131,8 @@ Each timeline.jsonl line:
 
 - Docker Desktop (macOS/Windows) or Docker Engine (Linux)
 - Docker Compose v2+
-- Ports: 18789 (gateway), 5900 (VNC), 6080 (noVNC/websockify) — per instance
-- Image: `openclaw:local` (pulled by deploy.sh or built from source)
+- Ports: 18789 (gateway), 6080 (KasmVNC) — per instance
+- Image: `openclaw:local` (built by deploy.sh with KasmVNC)
 
 ## Node.js Runtime
 
