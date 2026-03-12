@@ -58,28 +58,6 @@ services:
           -title "OpenClaw Gateway" \
           -e "openclaw gateway --bind lan --port 18789 --allow-unconfigured" &
 
-        # Wait for gateway to be ready, then open browser
-        (
-          echo "Waiting for OpenClaw gateway..."
-          for i in $(seq 1 15); do
-            if wget -q --spider http://localhost:18789 2>/dev/null; then
-              echo "Gateway ready!"
-              sleep 1
-              DISPLAY=:99 chromium \
-                --no-sandbox \
-                --disable-gpu \
-                --disable-dev-shm-usage \
-                --no-first-run \
-                --disable-extensions \
-                --window-size=1260,680 \
-                --window-position=10,10 \
-                "http://localhost:18789?token=${OPENCLAW_GATEWAY_TOKEN}"
-              break
-            fi
-            sleep 2
-          done
-        ) &
-
         # Keep container alive
         wait
 

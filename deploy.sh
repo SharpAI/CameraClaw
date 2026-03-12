@@ -99,8 +99,6 @@ RUN apt-get update -qq && \
     xvfb x11vnc websockify imagemagick \
     # Window manager + terminal
     fluxbox xterm dbus-x11 \
-    # Browser
-    chromium chromium-sandbox \
     # Fonts (so pages render properly)
     fonts-liberation fonts-noto-cjk fonts-dejavu-core \
     # Utilities
