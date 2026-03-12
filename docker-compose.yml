@@ -39,35 +39,32 @@ services:
         # Start noVNC websocket proxy
         websockify 6080 localhost:5900 &
 
-        # Start a terminal on the desktop
-        DISPLAY=:99 xterm -geometry 100x30+10+10 -fa 'Monospace' -fs 12 &
+        # Start OpenClaw gateway inside a terminal (logs visible on desktop)
+        DISPLAY=:99 xterm -geometry 120x35+10+10 -fa 'Monospace' -fs 11 \
+          -title "OpenClaw Gateway" \
+          -e "openclaw gateway --bind ${OPENCLAW_GATEWAY_BIND:-loopback} --port 18789 --allow-unconfigured" &
 
-        # Start OpenClaw gateway in background
-        openclaw gateway \
-          --bind "${OPENCLAW_GATEWAY_BIND:-loopback}" \
-          --port 18789 \
-          --allow-unconfigured &
-
-        # Wait for gateway to be ready
-        echo "Waiting for OpenClaw gateway..."
-        for i in 1 2 3 4 5 6 7 8 9 10; do
-          if curl -sf http://localhost:18789 >/dev/null 2>&1; then
-            echo "Gateway ready!"
-            break
-          fi
-          sleep 2
-        done
-
-        # Open gateway in browser
-        DISPLAY=:99 chromium \
-          --no-sandbox \
-          --disable-gpu \
-          --disable-dev-shm-usage \
-          --no-first-run \
-          --disable-extensions \
-          --window-size=1260,680 \
-          --window-position=10,10 \
-          "http://localhost:18789?token=${OPENCLAW_GATEWAY_TOKEN}" &
+        # Wait for gateway to be ready, then open browser
+        (
+          echo "Waiting for OpenClaw gateway..."
+          for i in $(seq 1 15); do
+            if wget -q --spider http://localhost:18789 2>/dev/null; then
+              echo "Gateway ready!"
+              sleep 1
+              DISPLAY=:99 chromium \
+                --no-sandbox \
+                --disable-gpu \
+                --disable-dev-shm-usage \
+                --no-first-run \
+                --disable-extensions \
+                --window-size=1260,680 \
+                --window-position=10,10 \
+                "http://localhost:18789?token=${OPENCLAW_GATEWAY_TOKEN}"
+              break
+            fi
+            sleep 2
+          done
+        ) &
 
         # Keep container alive
         wait
