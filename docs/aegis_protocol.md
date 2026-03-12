@@ -17,6 +17,7 @@ Emitted when an OpenClaw instance boots successfully. **This is the primary even
   "instance_id": "default",
   "gateway_url": "http://localhost:18789",
   "vnc_url": "ws://localhost:6080",
+  "novnc_url": "http://localhost:6080/vnc.html?autoconnect=true",
   "name": "Default Agent",
   "token": "6b43577de39f4343baa388b26b868fbe9a38d4b7aa7012f5d95fdef666dd8382"
 }
@@ -25,7 +26,8 @@ Emitted when an OpenClaw instance boots successfully. **This is the primary even
 | Field | Type | Description |
 |-------|------|-------------|
 | `gateway_url` | string | OpenClaw gateway HTTP URL — append `?token=<token>` for authenticated access |
-| `vnc_url` | string | noVNC WebSocket URL — connect with a VNC client or embed in iframe |
+| `vnc_url` | string | noVNC WebSocket URL — for programmatic VNC clients |
+| `novnc_url` | string | **noVNC web client URL** — open in browser for interactive desktop viewer |
 | `token` | string | Gateway auth token — pass as `?token=` query param |
 | `instance_id` | string | Unique instance identifier |
 | `name` | string | Human-readable instance name |
@@ -52,13 +54,15 @@ Emitted ~3s after `instance_started`, once VNC services are confirmed running.
   "event": "vnc_ready",
   "instance_id": "default",
   "vnc_ws_url": "ws://localhost:6080",
+  "novnc_url": "http://localhost:6080/vnc.html?autoconnect=true",
   "view_only_url": "ws://localhost:6080?view_only=true"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `vnc_ws_url` | string | WebSocket URL for interactive VNC (mouse/keyboard) |
+| `vnc_ws_url` | string | WebSocket URL for programmatic VNC clients |
+| `novnc_url` | string | **noVNC web client URL** — open in browser for interactive viewer |
 | `view_only_url` | string | WebSocket URL for view-only VNC (monitoring) |
 
 > [!TIP]  

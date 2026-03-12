@@ -658,6 +658,7 @@ async function createInstance(config, instanceId, name) {
       : `http://localhost:${port}`;
 
     const vncWsUrl = `ws://localhost:${novncPort}`;
+    const novncUrl = `http://localhost:${novncPort}/vnc.html?autoconnect=true`;
 
     // Emit instance_started with VNC info
     emit({
@@ -665,6 +666,7 @@ async function createInstance(config, instanceId, name) {
       instance_id: instanceId,
       gateway_url: gatewayUrl,
       vnc_url: vncWsUrl,
+      novnc_url: novncUrl,
       name: instance.name,
       token,
     });
@@ -677,6 +679,7 @@ async function createInstance(config, instanceId, name) {
       event: 'vnc_ready',
       instance_id: instanceId,
       vnc_ws_url: vncWsUrl,
+      novnc_url: novncUrl,
       view_only_url: `${vncWsUrl}?view_only=true`,
     });
 
@@ -687,7 +690,7 @@ async function createInstance(config, instanceId, name) {
 
     log(`Instance "${instanceId}" started at ${gatewayUrl} (noVNC: ${vncWsUrl})`);
     log(`  Gateway: ${gatewayUrl}?token=${instance.token}`);
-    log(`  noVNC:   ${vncWsUrl}`);
+    log(`  noVNC:   ${novncUrl}`);
     return instance;
 
   } catch (err) {
