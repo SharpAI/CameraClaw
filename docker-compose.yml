@@ -39,10 +39,24 @@ services:
         # Start noVNC websocket proxy
         websockify 6080 localhost:5900 &
 
+        # Create OpenClaw config to allow host-header origin fallback
+        # (Required when binding to 0.0.0.0 for Docker port mapping)
+        mkdir -p /home/node/.openclaw
+        cat > /home/node/.openclaw/config.json << 'CFGEOF'
+        {
+          "gateway": {
+            "controlUi": {
+              "dangerouslyAllowHostHeaderOriginFallback": true
+            }
+          }
+        }
+        CFGEOF
+
         # Start OpenClaw gateway inside a terminal (logs visible on desktop)
+        # Bind to 0.0.0.0 so Docker port mapping works from host
         DISPLAY=:99 xterm -geometry 120x35+10+10 -fa 'Monospace' -fs 11 \
           -title "OpenClaw Gateway" \
-          -e "openclaw gateway --bind ${OPENCLAW_GATEWAY_BIND:-loopback} --port 18789 --allow-unconfigured" &
+          -e "openclaw gateway --bind lan --port 18789 --allow-unconfigured" &
 
         # Wait for gateway to be ready, then open browser
         (
