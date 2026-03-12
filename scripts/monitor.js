@@ -659,6 +659,8 @@ async function createInstance(config, instanceId, name) {
     }
 
     log(`Instance "${instanceId}" started at ${gatewayUrl} (noVNC: ${vncWsUrl})`);
+    log(`  Gateway: ${gatewayUrl}?token=${instance.token}`);
+    log(`  noVNC:   ${vncWsUrl}`);
     return instance;
 
   } catch (err) {
