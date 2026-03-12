@@ -1,6 +1,6 @@
 # CameraClaw — OpenClaw Docker Compose
 # Manages OpenClaw instances with virtual desktop for monitoring.
-# The openclaw:local image is built by deploy.sh with desktop packages included.
+# The openclaw:local image is built by deploy.sh with KasmVNC + desktop packages.
 
 services:
   openclaw-gateway:
@@ -17,8 +17,7 @@ services:
     ports:
       - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
       - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
-      - "${OPENCLAW_VNC_PORT:-5900}:5900"
-      - "${OPENCLAW_NOVNC_PORT:-6080}:6080"
+      - "${OPENCLAW_KASMVNC_PORT:-6080}:6080"
     init: true
     restart: unless-stopped
     shm_size: "512m"
@@ -29,15 +28,18 @@ services:
         Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
         sleep 2
 
-        # Start window manager (fluxbox — lightweight)
-        fluxbox -display :99 &
-        sleep 1
+        # Start XFCE4 desktop session (Windows-like panel + window manager)
+        DISPLAY=:99 dbus-launch --exit-with-session startxfce4 &
+        sleep 3
 
-        # Start VNC server
-        x11vnc -display :99 -nopw -noxdamage -shared -forever -rfbport 5900 -bg -o /tmp/x11vnc.log
-
-        # Start noVNC websocket proxy
-        websockify --web /usr/share/novnc 6080 localhost:5900 &
+        # Start KasmVNC (integrated VNC server + web client on port 6080)
+        /usr/bin/kasmvncserver :99 \
+          -geometry 1280x720 \
+          -websocketPort 6080 \
+          -disableBasicAuth \
+          -FrameRate 30 \
+          -interface 0.0.0.0 &
+        sleep 2
 
         # Create OpenClaw config to allow host-header origin fallback
         # (Required when binding to 0.0.0.0 for Docker port mapping)
@@ -52,11 +54,33 @@ services:
         }
         CFGEOF
 
-        # Start OpenClaw gateway inside a terminal (logs visible on desktop)
-        # Bind to 0.0.0.0 so Docker port mapping works from host
-        DISPLAY=:99 xterm -geometry 120x35+10+10 -fa 'Monospace' -fs 11 \
-          -title "OpenClaw Gateway" \
+        # Create desktop shortcut to OpenClaw Control UI (with auth token)
+        GATEWAY_URL="http://localhost:18789"
+        TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
+        mkdir -p /home/node/Desktop
+        cat > /home/node/Desktop/OpenClaw.desktop << SHORTCUT
+        [Desktop Entry]
+        Version=1.0
+        Type=Application
+        Name=OpenClaw Control
+        Comment=Open the OpenClaw Control UI
+        Icon=web-browser
+        Exec=chromium --no-sandbox --disable-gpu "${GATEWAY_URL}?token=${TOKEN}"
+        Terminal=false
+        Categories=Network;WebBrowser;
+        SHORTCUT
+        chmod +x /home/node/Desktop/OpenClaw.desktop
+
+        # Start OpenClaw gateway in a terminal (logs visible on desktop)
+        DISPLAY=:99 xfce4-terminal --geometry=120x25+10+10 \
+          --title="OpenClaw Gateway" \
           -e "openclaw gateway --bind lan --port 18789 --allow-unconfigured" &
+
+        # Wait for gateway to start, then auto-open Chromium to OpenClaw
+        sleep 5
+        DISPLAY=:99 chromium --no-sandbox --disable-gpu \
+          --start-maximized \
+          "${GATEWAY_URL}?token=${TOKEN}" &
 
         # Keep container alive
         wait

@@ -23,7 +23,7 @@ params:
     label: Snapshot FPS
     type: number
     default: 0
-    description: "Snapshots per second (0 = disabled, frontend uses noVNC). Set > 0 for background timeline recording"
+    description: "Snapshots per second (0 = disabled, frontend uses KasmVNC). Set > 0 for background timeline recording"
 
   - key: screen_change_threshold
     label: Screen Change Threshold

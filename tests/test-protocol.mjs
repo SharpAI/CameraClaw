@@ -195,15 +195,15 @@ async function runTests() {
     assert(!!startEvent, 'Emits "instance_started" event (auto_start)');
     assert(startEvent?.instance_id === 'default', 'instance_started.instance_id === "default"');
     assert(startEvent?.gateway_url?.includes('29789'), 'instance_started.gateway_url contains port');
-    assert(startEvent?.vnc_url?.includes('ws://'), 'instance_started.vnc_url is a WebSocket URL');
+    assert(startEvent?.kasmvnc_url?.includes('http://'), 'instance_started.kasmvnc_url is an HTTP URL');
     assert(typeof startEvent?.token === 'string' && startEvent.token.length > 0, 'instance_started.token is non-empty');
 
     // ── Verify vnc_ready event ──
     const vncEvent = findEvent('vnc_ready');
     assert(!!vncEvent, 'Emits "vnc_ready" event');
     assert(vncEvent?.instance_id === 'default', 'vnc_ready.instance_id === "default"');
-    assert(vncEvent?.vnc_ws_url?.includes('ws://'), 'vnc_ready.vnc_ws_url is a WebSocket URL');
-    assert(vncEvent?.view_only_url?.includes('view_only=true'), 'vnc_ready.view_only_url includes query param');
+    assert(vncEvent?.kasmvnc_url?.includes('http://'), 'vnc_ready.kasmvnc_url is an HTTP URL');
+    assert(vncEvent?.view_only_url?.includes('viewOnly=true'), 'vnc_ready.view_only_url includes viewOnly param');
 
     // ── Test: list_instances command ──
     console.log('\n📋 Test: list_instances command');
@@ -216,7 +216,7 @@ async function runTests() {
     assert(Array.isArray(listEvent?.instances), 'instance_list.instances is an array');
     assert(listEvent?.instances?.length === 1, 'instance_list has 1 instance');
     assert(listEvent?.instances?.[0]?.instance_id === 'default', 'Listed instance is "default"');
-    assert(listEvent?.instances?.[0]?.vnc_ws_url?.includes('ws://'), 'Listed instance has vnc_ws_url');
+    assert(listEvent?.instances?.[0]?.kasmvnc_url?.includes('http://'), 'Listed instance has kasmvnc_url');
 
     // ── Test: take_snapshot command ──
     console.log('\n📋 Test: take_snapshot command');

@@ -145,7 +145,7 @@ Security cameras watch people. Camera Claw watches AI agents. You wouldn't let a
 Camera Claw provides three layers:
 
 1. **The Room** — A Docker sandbox with a virtual desktop (Xvfb + Chrome) for OpenClaw
-2. **The Camera** — noVNC live view + periodic snapshots with metadata
+2. **The Camera** — KasmVNC live view + periodic snapshots with metadata
 3. **The DVR** — Snapshot timeline with agent logs, network events, and optional VLM analysis
 
 ## Docker Architecture
@@ -157,7 +157,7 @@ Each OpenClaw instance runs in an isolated Docker stack with a virtual desktop:
 | `openclaw-gateway` | `openclaw:local` | AI agent gateway + Control UI (port 18789) |
 | `openclaw-cli` | Same image | CLI for onboarding, channel setup |
 
-Inside the container: **Xvfb** (virtual display :99) + **Chrome** + **x11vnc** (VNC server on :5900) + **websockify** (noVNC on :6080).
+Inside the container: **Xvfb** (virtual display :99) + **Chrome** + **KasmVNC** (integrated VNC server + web client on :6080).
 
 ### Multi-Instance Support
 
@@ -179,7 +179,7 @@ CameraClaw can request Aegis services (LLM, VLM, system info) via the **inline q
 
 ```jsonl
 {"event":"ready", "mode":"docker", "openclaw_version":"latest", "monitoring":true}
-{"event":"instance_started", "instance_id":"default", "gateway_url":"http://localhost:18789", "vnc_url":"ws://localhost:6080", "token":"abc123...", "name":"Default Agent"}
+{"event":"instance_started", "instance_id":"default", "gateway_url":"http://localhost:18789", "kasmvnc_url":"http://localhost:6080", "token":"abc123...", "name":"Default Agent"}
 {"event":"instance_stopped", "instance_id":"default", "reason":"user_request"}
 {"event":"error", "message":"Docker daemon not running", "retriable":false}
 ```
@@ -187,7 +187,7 @@ CameraClaw can request Aegis services (LLM, VLM, system info) via the **inline q
 #### Desktop Monitoring Events
 
 ```jsonl
-{"event":"vnc_ready", "instance_id":"default", "vnc_ws_url":"ws://localhost:6080", "view_only_url":"ws://localhost:6080?view_only=true"}
+{"event":"vnc_ready", "instance_id":"default", "kasmvnc_url":"http://localhost:6080", "view_only_url":"http://localhost:6080/?viewOnly=true"}
 {"event":"snapshot", "instance_id":"default", "path":"/abs/path/snap_001.jpg", "ts":"2026-03-11T14:00:05Z", "screen_diff_pct":42.3}
 {"event":"screen_change", "instance_id":"default", "diff_pct":42.3, "snapshot_path":"/abs/path/snap_002.jpg", "ts":"2026-03-11T14:00:07Z"}
 {"event":"activity_summary", "instance_id":"default", "status":"active", "ts":"2026-03-11T14:00:10Z", "vlm_summary":"Agent is composing a tweet about AI developments", "vlm_safety":"ok"}
@@ -253,11 +253,14 @@ Messages without a `command` field (e.g. detection frame events from other skill
 
 ### Monitor View (Camera Grid)
 
-The OpenClaw desktop appears as a camera tile using **noVNC in view-only mode**:
+The OpenClaw desktop appears as a camera tile using **KasmVNC in view-only mode**:
 
 ```javascript
-// Frontend: connect noVNC with viewOnly=true for monitor tile
-const vnc = new RFB(tileElement, vncWsUrl, { viewOnly: true });
+// Frontend: embed KasmVNC iframe with viewOnly=true for monitor tile
+const iframe = document.createElement('iframe');
+iframe.src = viewOnlyUrl;  // http://localhost:6080/?viewOnly=true
+iframe.style.cssText = 'width:100%;height:100%;border:none';
+tileElement.appendChild(iframe);
 ```
 
 - Live desktop stream, scaled to thumbnail
@@ -266,14 +269,19 @@ const vnc = new RFB(tileElement, vncWsUrl, { viewOnly: true });
 
 ### OpenClaw Panel (Sidebar)
 
-Full interactive noVNC session:
+Full interactive KasmVNC session:
 
 ```javascript
-// Frontend: connect noVNC with full interaction for panel
-const vnc = new RFB(panelElement, vncWsUrl, { viewOnly: false });
+// Frontend: embed KasmVNC iframe with full interaction for panel
+const iframe = document.createElement('iframe');
+iframe.src = kasmvncUrl;  // http://localhost:6080 (interactive)
+iframe.style.cssText = 'width:100%;height:100%;border:none';
+iframe.allow = 'clipboard-read; clipboard-write';
+panelElement.appendChild(iframe);
 ```
 
 - Full mouse/keyboard control
+- Clipboard sharing enabled
 - Used for onboarding, configuration, manual intervention
 
 ### Recording Pipeline
@@ -310,12 +318,12 @@ Each line in `timeline.jsonl`:
 ## Installation
 
 ```bash
-./deploy.sh    # Node.js deps + Docker image pull + config dir setup
+./deploy.sh    # Node.js deps + Docker image build (with KasmVNC) + config dir setup
 ```
 
 1. Checks for Node.js ≥18
 2. Runs `npm install`
 3. Verifies Docker and Docker Compose
 4. Creates `~/.openclaw/` config directory
-5. Pulls/builds OpenClaw Docker image
+5. Builds OpenClaw Docker image (with KasmVNC + desktop packages)
 6. Validates `docker-compose.yml`

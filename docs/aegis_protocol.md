@@ -16,8 +16,7 @@ Emitted when an OpenClaw instance boots successfully. **This is the primary even
   "event": "instance_started",
   "instance_id": "default",
   "gateway_url": "http://localhost:18789",
-  "vnc_url": "ws://localhost:6080",
-  "novnc_url": "http://localhost:6080/vnc.html?autoconnect=true",
+  "kasmvnc_url": "http://localhost:6080",
   "name": "Default Agent",
   "token": "6b43577de39f4343baa388b26b868fbe9a38d4b7aa7012f5d95fdef666dd8382"
 }
@@ -26,8 +25,7 @@ Emitted when an OpenClaw instance boots successfully. **This is the primary even
 | Field | Type | Description |
 |-------|------|-------------|
 | `gateway_url` | string | OpenClaw gateway HTTP URL — append `?token=<token>` for authenticated access |
-| `vnc_url` | string | noVNC WebSocket URL — for programmatic VNC clients |
-| `novnc_url` | string | **noVNC web client URL** — open in browser for interactive desktop viewer |
+| `kasmvnc_url` | string | **KasmVNC web client URL** — embed in iframe for desktop viewer |
 | `token` | string | Gateway auth token — pass as `?token=` query param |
 | `instance_id` | string | Unique instance identifier |
 | `name` | string | Human-readable instance name |
@@ -38,35 +36,35 @@ Emitted when an OpenClaw instance boots successfully. **This is the primary even
 const gatewayWithAuth = `${event.gateway_url}?token=${event.token}`;
 // → "http://localhost:18789?token=6b43..."
 
-// Embed noVNC viewer:
-const vncUrl = event.vnc_url;
-// → "ws://localhost:6080"
+// Embed KasmVNC viewer (iframe):
+const kasmUrl = event.kasmvnc_url;
+// → "http://localhost:6080"
+// View-only: `${kasmUrl}/?viewOnly=true`
+// Interactive: kasmUrl (as-is)
 ```
 
 ---
 
 ### `vnc_ready`
 
-Emitted ~3s after `instance_started`, once VNC services are confirmed running.
+Emitted ~3s after `instance_started`, once KasmVNC is confirmed running.
 
 ```json
 {
   "event": "vnc_ready",
   "instance_id": "default",
-  "vnc_ws_url": "ws://localhost:6080",
-  "novnc_url": "http://localhost:6080/vnc.html?autoconnect=true",
-  "view_only_url": "ws://localhost:6080?view_only=true"
+  "kasmvnc_url": "http://localhost:6080",
+  "view_only_url": "http://localhost:6080/?viewOnly=true"
 }
 ```
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `vnc_ws_url` | string | WebSocket URL for programmatic VNC clients |
-| `novnc_url` | string | **noVNC web client URL** — open in browser for interactive viewer |
-| `view_only_url` | string | WebSocket URL for view-only VNC (monitoring) |
+| `kasmvnc_url` | string | **KasmVNC web client URL** — embed in iframe for interactive desktop |
+| `view_only_url` | string | KasmVNC URL with view-only mode (no mouse/keyboard input) |
 
 > [!TIP]  
-> Wait for `vnc_ready` before connecting a VNC viewer. The `instance_started` event fires before VNC is fully initialized.
+> Wait for `vnc_ready` before connecting a VNC viewer. The `instance_started` event fires before KasmVNC is fully initialized.
 
 ---
 
@@ -117,12 +115,10 @@ All ports are **dynamically allocated** to avoid conflicts:
 |------|------|---------|-------------|
 | Gateway | 18789 | OpenClaw HTTP API | 18789+ |
 | Bridge | gateway+1 | Internal bridge | auto |
-| VNC | 5900 | VNC server (exposed to host) | 5900+ |
-| noVNC | 6080 | WebSocket proxy | 6080+ |
+| KasmVNC | 6080 | Integrated VNC server + web client | 6080+ |
 
 - Ports are probed by attempting `net.createServer().listen(port)` — if taken, increment and retry
 - Multiple instances get unique ports (tracked in `usedPorts()`)
-- macOS Screen Sharing uses 5900, so VNC typically lands on 5901+
 
 ---
 
@@ -142,8 +138,8 @@ Aegis sends JSON commands to CameraClaw via **stdin**:
 ## Aegis Integration Checklist
 
 - [ ] Parse JSONL on skill stdout for `event` field
-- [ ] On `instance_started` → store `gateway_url`, `vnc_url`, `token` per instance
-- [ ] On `vnc_ready` → enable VNC viewer component (use `vnc_ws_url`)
+- [ ] On `instance_started` → store `gateway_url`, `kasmvnc_url`, `token` per instance
+- [ ] On `vnc_ready` → enable KasmVNC iframe (use `kasmvnc_url`, `view_only_url`)
 - [ ] On `instance_stopped` → remove instance from UI
 - [ ] On `error` with `retriable: true` → show retry button
 - [ ] Send `create_instance` / `stop_instance` via stdin JSON
