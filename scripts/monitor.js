@@ -63,7 +63,7 @@ function generateToken() {
   return randomBytes(32).toString('hex');
 }
 
-function loadConfig() {
+async function loadConfig() {
   const configPath = join(process.cwd(), 'config.yaml');
   const envParams = process.env.AEGIS_SKILL_PARAMS;
 
@@ -73,18 +73,39 @@ function loadConfig() {
   if (existsSync(configPath)) {
     try {
       const raw = readFileSync(configPath, 'utf-8');
-      const lines = raw.split('\n');
-      let inParams = false;
-      for (const line of lines) {
-        const trimmed = line.trim();
-        if (trimmed === 'params:') { inParams = true; continue; }
-        if (inParams && trimmed && !trimmed.startsWith('#')) {
-          const match = trimmed.match(/^(\w+):\s*(.+)$/);
-          if (match) {
-            const [, key, val] = match;
-            if (key in config) {
-              config[key] = parseValue(val, typeof config[key]);
-            }
+      // Use yaml package if available, otherwise fall back to regex
+      let yamlParams = null;
+      try {
+        const { parse: parseYaml } = await import('yaml');
+        const doc = parseYaml(raw);
+        if (doc && Array.isArray(doc.params)) {
+          // Structured format: params is array of { key, default, ... }
+          yamlParams = {};
+          for (const p of doc.params) {
+            if (p.key && 'default' in p) yamlParams[p.key] = p.default;
+          }
+        } else if (doc && doc.params && typeof doc.params === 'object') {
+          // Flat format: params is { key: value, ... }
+          yamlParams = doc.params;
+        }
+      } catch {
+        // yaml package not available — use simple regex for flat format
+        yamlParams = {};
+        const lines = raw.split('\n');
+        let inParams = false;
+        for (const line of lines) {
+          const trimmed = line.trim();
+          if (trimmed === 'params:') { inParams = true; continue; }
+          if (inParams && trimmed && !trimmed.startsWith('#') && !trimmed.startsWith('-')) {
+            const match = trimmed.match(/^(\w+):\s*(.+)$/);
+            if (match) yamlParams[match[1]] = match[2];
+          }
+        }
+      }
+      if (yamlParams) {
+        for (const [key, val] of Object.entries(yamlParams)) {
+          if (key in config) {
+            config[key] = parseValue(String(val), typeof config[key]);
           }
         }
       }
@@ -878,7 +899,7 @@ See SKILL.md for full parameter and protocol documentation.`);
     process.exit(0);
   }
 
-  const config = loadConfig();
+  const config = await loadConfig();
 
   // Docker is required — no native fallback
   const dockerAvailable = isDockerAvailable();

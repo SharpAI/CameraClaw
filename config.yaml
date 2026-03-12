@@ -1,18 +1,87 @@
-# CameraClaw Configuration
-# Override these via Aegis skill config panel or AEGIS_SKILL_PARAMS env var.
+# CameraClaw — Configuration Schema
+# Parsed by Aegis skill-registry-service.cjs → parseConfigYaml()
+# Format: params[] with key, type, label, default, description, options
 
 params:
-  auto_start: true
-  recording_mode: continuous
-  clip_duration: 300
-  snapshot_fps: 0
-  network_monitoring: true
-  alert_unknown_connections: true
-  screen_change_threshold: 20
-  vlm_analysis: "off"
-  vlm_interval: 60
-  # OpenClaw gateway
-  openclaw_version: local
-  openclaw_config_dir: "~/.openclaw"
-  openclaw_gateway_port: 18789
-  openclaw_gateway_bind: loopback
+  - key: auto_start
+    label: Auto Start
+    type: boolean
+    default: true
+    description: "Start the default OpenClaw agent instance when skill launches"
+
+  - key: recording_mode
+    label: Recording Mode
+    type: select
+    default: continuous
+    description: "When to capture desktop snapshots"
+    options:
+      - { value: continuous, label: "Continuous (always)" }
+      - { value: on_change, label: "On Change (screen diff)" }
+      - { value: manual, label: "Manual (on-demand only)" }
+
+  - key: snapshot_fps
+    label: Snapshot FPS
+    type: number
+    default: 0
+    description: "Snapshots per second (0 = disabled, frontend uses noVNC). Set > 0 for background timeline recording"
+
+  - key: screen_change_threshold
+    label: Screen Change Threshold
+    type: number
+    default: 20
+    description: "Minimum diff percentage (0–100) to trigger a screen_change event"
+
+  - key: vlm_analysis
+    label: VLM Analysis
+    type: select
+    default: "off"
+    description: "When to send snapshots to VLM for analysis"
+    options:
+      - { value: "off", label: "Off" }
+      - { value: on_change, label: "On Screen Change" }
+      - { value: periodic, label: "Periodic (at vlm_interval)" }
+
+  - key: vlm_interval
+    label: VLM Interval
+    type: number
+    default: 60
+    description: "Seconds between periodic VLM analysis (when vlm_analysis=periodic)"
+
+  - key: openclaw_version
+    label: OpenClaw Version
+    type: string
+    default: local
+    description: "Docker image tag for OpenClaw (e.g. 'local', '2026.3.8')"
+
+  - key: openclaw_gateway_port
+    label: Gateway Port
+    type: number
+    default: 18789
+    description: "Base port for the OpenClaw gateway (auto-increments for multiple instances)"
+
+  - key: openclaw_gateway_bind
+    label: Gateway Bind
+    type: select
+    default: loopback
+    description: "Network binding for the gateway inside the container"
+    options:
+      - { value: loopback, label: "Loopback (localhost only)" }
+      - { value: lan, label: "LAN (requires allowedOrigins)" }
+
+  - key: clip_duration
+    label: Clip Duration
+    type: number
+    default: 300
+    description: "Maximum clip length in seconds for recorded sessions"
+
+  - key: network_monitoring
+    label: Network Monitoring
+    type: boolean
+    default: true
+    description: "Monitor container network connections for anomalies"
+
+  - key: alert_unknown_connections
+    label: Alert Unknown Connections
+    type: boolean
+    default: true
+    description: "Emit alerts when container makes unexpected network connections"
