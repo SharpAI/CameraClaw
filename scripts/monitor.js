@@ -28,7 +28,7 @@ const DEFAULT_CONFIG = {
   openclaw_version: 'local',
   recording_mode: 'continuous',
   clip_duration: 300,
-  snapshot_fps: 0.5,
+  snapshot_fps: 0,
   network_monitoring: true,
   alert_unknown_connections: true,
   screen_change_threshold: 20,
