@@ -323,6 +323,12 @@ function startSnapshotLoop(config, instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) return;
 
+  // Skip entirely when snapshot_fps is 0 or negative
+  if (!config.snapshot_fps || config.snapshot_fps <= 0) {
+    log(`Snapshot loop disabled for "${instanceId}" (fps=${config.snapshot_fps})`);
+    return;
+  }
+
   const intervalMs = Math.max(1000, Math.round(1000 / config.snapshot_fps));
   let lastSnapshotPath = null;
   let lastChangeTime = Date.now();
@@ -674,8 +680,8 @@ async function createInstance(config, instanceId, name) {
       view_only_url: `${vncWsUrl}?view_only=true`,
     });
 
-    // Start the snapshot pipeline (if recording is enabled)
-    if (config.recording_mode !== 'manual') {
+    // Start the snapshot pipeline (if recording is enabled and fps > 0)
+    if (config.recording_mode !== 'manual' && config.snapshot_fps > 0) {
       startSnapshotLoop(config, instanceId);
     }
 
