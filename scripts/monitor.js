@@ -720,7 +720,7 @@ async function stopInstance(config, instanceId) {
   if (composeFile) {
     const env = buildComposeEnv(instanceId);
     try {
-      execSync(`docker compose -f "${composeFile}" down`, { env, stdio: 'pipe', timeout: 30000 });
+      execSync(`docker compose -f "${composeFile}" down --remove-orphans`, { env, stdio: 'pipe', timeout: 30000 });
     } catch (err) {
       log(`Warning: docker compose down for "${instanceId}" failed: ${err.message}`);
     }
@@ -874,7 +874,30 @@ async function shutdown(config) {
   for (const instanceId of instances.keys()) {
     await stopInstance(config, instanceId);
   }
+  // Final cleanup — tear down any orphaned compose resources
+  const composeFile = resolveComposeFile();
+  if (composeFile) {
+    try {
+      execSync(`docker compose -f "${composeFile}" down --remove-orphans`, { stdio: 'pipe', timeout: 15000 });
+    } catch { /* ignore */ }
+  }
   process.exit(0);
+}
+
+/**
+ * Clean up stale containers from a previous run that wasn't shut down cleanly.
+ */
+function cleanupStaleContainers() {
+  const composeFile = resolveComposeFile();
+  if (!composeFile) return;
+  try {
+    const ps = execSync(`docker compose -f "${composeFile}" ps -q`, { stdio: 'pipe', timeout: 5000 }).toString().trim();
+    if (ps) {
+      log('Cleaning up stale containers from previous run...');
+      execSync(`docker compose -f "${composeFile}" down --remove-orphans`, { stdio: 'pipe', timeout: 30000 });
+      log('Stale containers cleaned up');
+    }
+  } catch { /* no stale containers or docker not available */ }
 }
 
 async function main() {
@@ -908,6 +931,9 @@ See SKILL.md for full parameter and protocol documentation.`);
   const config = await loadConfig();
 
   // Docker is required — no native fallback
+  // Clean up stale containers from previous run
+  cleanupStaleContainers();
+
   const dockerAvailable = isDockerAvailable();
   const composeAvailable = isDockerComposeAvailable();
 
