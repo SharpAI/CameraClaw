@@ -42,7 +42,7 @@ services:
         # Create OpenClaw config to allow host-header origin fallback
         # (Required when binding to 0.0.0.0 for Docker port mapping)
         mkdir -p /home/node/.openclaw
-        cat > /home/node/.openclaw/config.json << 'CFGEOF'
+        cat > /home/node/.openclaw/openclaw.json << 'CFGEOF'
         {
           "gateway": {
             "controlUi": {
