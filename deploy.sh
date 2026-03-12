@@ -99,8 +99,8 @@ FROM node:22-bookworm
 # Install XFCE4 desktop environment + Chromium browser
 RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
-    # Virtual display
-    xvfb imagemagick wget \
+    # KasmVNC provides its own Xvnc — no Xvfb needed
+    imagemagick wget \
     # XFCE4 desktop (Windows-like panel + window manager)
     xfce4 xfce4-terminal dbus-x11 at-spi2-core \
     # Chromium browser (for OpenClaw Control UI)

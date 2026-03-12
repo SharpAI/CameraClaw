@@ -902,7 +902,7 @@ Usage:
   node scripts/monitor.js --help    Show this help
 
 Features:
-  - Virtual desktop (Xvfb + Chrome) inside Docker
+  - Virtual desktop (KasmVNC + XFCE4 + Chrome) inside Docker
   - KasmVNC live view (view-only for Monitor, interactive for Panel)
   - Periodic VNC snapshots with screen-diff detection
   - VLM analysis via Aegis inline query protocol

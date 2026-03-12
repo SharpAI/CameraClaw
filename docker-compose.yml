@@ -10,6 +10,9 @@ services:
       HOME: /home/node
       TERM: xterm-256color
       DISPLAY: ":99"
+      LANG: en_US.UTF-8
+      LC_ALL: en_US.UTF-8
+      LANGUAGE: en_US:en
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
@@ -24,31 +27,163 @@ services:
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
-        # Start virtual display
-        Xvfb :99 -screen 0 1280x720x24 -ac +extension GLX +render -noreset &
-        sleep 2
+        # Clean up stale lock files from previous runs
+        rm -f /tmp/.X99-lock /tmp/.X11-unix/X99
 
-        # Start XFCE4 desktop session (Windows-like panel + window manager)
-        DISPLAY=:99 dbus-launch --exit-with-session startxfce4 &
-        sleep 3
+        # --- Bypass ALL kasmvncserver interactive prompts ---
 
-        # Start KasmVNC (integrated VNC server + web client on port 6080)
+        # 1) Create write user at $HOME/.kasmpasswd (line 1173 of kasmvncserver)
+        printf 'password\npassword\n' | kasmvncpasswd -u user -w /home/node/.kasmpasswd
+
+        # 2) Pre-create xstartup with XFCE + Windows-like theme (skips CreateXstartupIfNeeded)
+        mkdir -p /home/node/.vnc
+        cat > /home/node/.vnc/xstartup << 'XEOF'
+        #!/bin/sh
+        export LANG=en_US.UTF-8
+        export LC_ALL=en_US.UTF-8
+
+        # Apply Windows-like XFCE settings before starting the session
+        mkdir -p /home/node/.config/xfce4/xfconf/xfce-perchannel-xml
+
+        # Window manager: Greybird theme (clean, Windows-like)
+        cat > /home/node/.config/xfce4/xfconf/xfce-perchannel-xml/xfwm4.xml << 'XFWM'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <channel name="xfwm4" version="1.0">
+          <property name="general" type="empty">
+            <property name="theme" type="string" value="Greybird"/>
+            <property name="title_font" type="string" value="Sans Bold 9"/>
+          </property>
+        </channel>
+        XFWM
+
+        # GTK theme + icons
+        cat > /home/node/.config/xfce4/xfconf/xfce-perchannel-xml/xsettings.xml << 'XSET'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <channel name="xsettings" version="1.0">
+          <property name="Net" type="empty">
+            <property name="ThemeName" type="string" value="Greybird"/>
+            <property name="IconThemeName" type="string" value="Adwaita"/>
+          </property>
+          <property name="Gtk" type="empty">
+            <property name="FontName" type="string" value="Sans 10"/>
+          </property>
+        </channel>
+        XSET
+
+        # Desktop: solid dark background, no icons
+        cat > /home/node/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml << 'XDESK'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <channel name="xfce4-desktop" version="1.0">
+          <property name="desktop-icons" type="empty">
+            <property name="style" type="int" value="0"/>
+          </property>
+          <property name="backdrop" type="empty">
+            <property name="screen0" type="empty">
+              <property name="monitorVNC-0" type="empty">
+                <property name="workspace0" type="empty">
+                  <property name="color-style" type="int" value="0"/>
+                  <property name="rgba1" type="array">
+                    <value type="uint" value="8738"/>
+                    <value type="uint" value="10280"/>
+                    <value type="uint" value="13878"/>
+                    <value type="uint" value="65535"/>
+                  </property>
+                  <property name="image-style" type="int" value="0"/>
+                </property>
+              </property>
+            </property>
+          </property>
+        </channel>
+        XDESK
+
+        # Panel: single bottom panel (Windows-like taskbar)
+        cat > /home/node/.config/xfce4/xfconf/xfce-perchannel-xml/xfce4-panel.xml << 'XPANEL'
+        <?xml version="1.0" encoding="UTF-8"?>
+        <channel name="xfce4-panel" version="1.0">
+          <property name="configver" type="int" value="2"/>
+          <property name="panels" type="array">
+            <value type="int" value="1"/>
+            <property name="panel-1" type="empty">
+              <property name="position" type="string" value="p=8;x=640;y=708"/>
+              <property name="length" type="uint" value="100"/>
+              <property name="position-locked" type="bool" value="true"/>
+              <property name="size" type="uint" value="30"/>
+              <property name="plugin-ids" type="array">
+                <value type="int" value="1"/>
+                <value type="int" value="2"/>
+                <value type="int" value="3"/>
+                <value type="int" value="4"/>
+                <value type="int" value="5"/>
+              </property>
+            </property>
+          </property>
+          <property name="plugins" type="empty">
+            <property name="plugin-1" type="string" value="applicationsmenu"/>
+            <property name="plugin-2" type="string" value="tasklist"/>
+            <property name="plugin-3" type="string" value="separator">
+              <property name="expand" type="bool" value="true"/>
+              <property name="style" type="uint" value="0"/>
+            </property>
+            <property name="plugin-4" type="string" value="systray"/>
+            <property name="plugin-5" type="string" value="clock"/>
+          </property>
+        </channel>
+        XPANEL
+
+        dbus-launch --exit-with-session startxfce4
+        XEOF
+        chmod +x /home/node/.vnc/xstartup
+
+        # 3) Replace select-de.sh with a no-op (ConfigureDeToRun calls it
+        #    OUTSIDE the $skipxstartup guard, so -noxstartup won't help)
+        printf '#!/bin/sh\nexit 0\n' > /usr/lib/kasmvncserver/select-de.sh
+        chmod +x /usr/lib/kasmvncserver/select-de.sh
+
+        # 4) Force KasmVNC web client to English (it auto-detects browser language,
+        #    picking up zh-CN from macOS). Replace all navigator language references
+        #    in the bundled JS files that KasmVNC serves.
+        for f in /usr/share/kasmvnc/www/dist/*.bundle.js; do
+          [ -f "$$f" ] || continue
+          sed -i "s/window\.navigator\.languages/['en-US']/g; s/navigator\.languages/['en-US']/g; s/navigator\.language/\"en-US\"/g; s/navigator\.userLanguage/\"en-US\"/g" "$$f" 2>/dev/null || true
+        done
+
+        # 4) Configure KasmVNC for HTTP (not HTTPS) — simpler for local Docker,
+        #    avoids self-signed cert issues with Electron webview.
+        cat > /home/node/.vnc/kasmvnc.yaml << 'VNCEOF'
+        logging:
+          log_writer_name: all
+          log_dest: logfile
+          level: 30
+        network:
+          protocol: http
+          websocket_port: 6080
+          interface: 0.0.0.0
+          ssl:
+            require_ssl: false
+        VNCEOF
+
+        # Start KasmVNC (wrapper handles Xvnc + web client).
+        # -publicIP 127.0.0.1 skips STUN/ICE queries (block in Docker).
+        # -disableBasicAuth removes the login prompt in the web client.
         /usr/bin/kasmvncserver :99 \
           -geometry 1280x720 \
           -websocketPort 6080 \
           -disableBasicAuth \
           -FrameRate 30 \
-          -interface 0.0.0.0 &
-        sleep 2
+          -interface 0.0.0.0 \
+          -publicIP 127.0.0.1 \
+          -sslOnly 0
+        sleep 5
 
         # Create OpenClaw config to allow host-header origin fallback
-        # (Required when binding to 0.0.0.0 for Docker port mapping)
+        # and insecure auth (token-only, no device identity required)
         mkdir -p /home/node/.openclaw
         cat > /home/node/.openclaw/openclaw.json << 'CFGEOF'
         {
           "gateway": {
             "controlUi": {
-              "dangerouslyAllowHostHeaderOriginFallback": true
+              "dangerouslyAllowHostHeaderOriginFallback": true,
+              "allowInsecureAuth": true
             }
           }
         }
