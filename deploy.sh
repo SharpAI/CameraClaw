@@ -96,7 +96,7 @@ FROM node:22-bookworm
 RUN apt-get update -qq && \
     DEBIAN_FRONTEND=noninteractive apt-get install -y -qq --no-install-recommends \
     # Virtual display + VNC
-    xvfb x11vnc websockify imagemagick \
+    xvfb x11vnc websockify novnc imagemagick \
     # Window manager + terminal
     fluxbox xterm dbus-x11 \
     # Fonts (so pages render properly)

@@ -37,7 +37,7 @@ services:
         x11vnc -display :99 -nopw -noxdamage -shared -forever -rfbport 5900 -bg -o /tmp/x11vnc.log
 
         # Start noVNC websocket proxy
-        websockify 6080 localhost:5900 &
+        websockify --web /usr/share/novnc 6080 localhost:5900 &
 
         # Create OpenClaw config to allow host-header origin fallback
         # (Required when binding to 0.0.0.0 for Docker port mapping)
