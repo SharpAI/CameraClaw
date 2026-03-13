@@ -788,6 +788,12 @@ async function createInstance(config, instanceId, name) {
     };
   }
 
+  // Enable browser tool for Docker (Chromium needs --no-sandbox when running as root)
+  openclawConfig.browser = {
+    ...(openclawConfig.browser || {}),
+    noSandbox: true,
+  };
+
   writeFileSync(openclawJsonPath, JSON.stringify(openclawConfig, null, 2), 'utf-8');
   log(`Pre-wrote ${openclawJsonPath} (providers: ${Object.keys(openclawConfig.models?.providers || {}).join(', ') || 'none'})`);
 
