@@ -30,10 +30,6 @@ services:
     init: true
     restart: unless-stopped
     shm_size: "512m"
-    cap_add:
-      - SYS_ADMIN
-    security_opt:
-      - seccomp:unconfined
     entrypoint: ["/bin/sh", "-c"]
     command:
       - |
@@ -219,7 +215,7 @@ services:
         Name=OpenClaw Control
         Comment=Open the OpenClaw Control UI
         Icon=web-browser
-        Exec=chromium --disable-gpu "$${GATEWAY_URL}?token=$${TOKEN}"
+        Exec=chromium --no-sandbox --test-type "$${GATEWAY_URL}?token=$${TOKEN}"
         Terminal=false
         Categories=Network;WebBrowser;
         SHORTCUT
@@ -241,7 +237,7 @@ services:
         done
 
         # Auto-open Chromium to OpenClaw gateway
-        DISPLAY=:99 chromium --disable-gpu \
+        DISPLAY=:99 chromium --no-sandbox --test-type \
           --start-maximized \
           "$${GATEWAY_URL}?token=$${TOKEN}" &
 

@@ -766,6 +766,28 @@ async function createInstance(config, instanceId, name) {
     }
   }
 
+  // Set agent default model to the first available provider's first model
+  // so the Agents page in the OpenClaw dashboard lists the model
+  if (apiKeys.openaiApiKey && openclawConfig.models?.providers?.openai?.models?.length) {
+    const firstModel = openclawConfig.models.providers.openai.models[0];
+    openclawConfig.agents = {
+      ...(openclawConfig.agents || {}),
+      defaults: {
+        ...(openclawConfig.agents?.defaults || {}),
+        model: { primary: `openai/${firstModel.id}` },
+      },
+    };
+  } else if (apiKeys.anthropicApiKey && openclawConfig.models?.providers?.anthropic?.models?.length) {
+    const firstModel = openclawConfig.models.providers.anthropic.models[0];
+    openclawConfig.agents = {
+      ...(openclawConfig.agents || {}),
+      defaults: {
+        ...(openclawConfig.agents?.defaults || {}),
+        model: { primary: `anthropic/${firstModel.id}` },
+      },
+    };
+  }
+
   writeFileSync(openclawJsonPath, JSON.stringify(openclawConfig, null, 2), 'utf-8');
   log(`Pre-wrote ${openclawJsonPath} (providers: ${Object.keys(openclawConfig.models?.providers || {}).join(', ') || 'none'})`);
 
@@ -859,6 +881,15 @@ async function createInstance(config, instanceId, name) {
             );
             log(`Applied ${provider} config to running gateway (${(provConf.models || []).length} models)`);
           }
+        }
+        // Also apply agent default model to the running gateway
+        if (openclawConfig.agents?.defaults?.model) {
+          const val = JSON.stringify(openclawConfig.agents.defaults.model);
+          execSync(
+            `docker compose -f "${composeFile}" exec -T openclaw-gateway openclaw config set 'agents.defaults.model' '${val}' --strict-json`,
+            { env, stdio: 'pipe', timeout: 10000 }
+          );
+          log(`Applied agent default model: ${openclawConfig.agents.defaults.model.primary}`);
         }
       } catch (err) {
         log(`Warning: post-start config apply failed: ${err.message}`);
