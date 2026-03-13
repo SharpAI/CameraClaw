@@ -30,7 +30,7 @@ RUN ARCH=$(dpkg --print-architecture) && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install OpenClaw from npm
-RUN npm install -g openclaw@latest
+RUN npm install -g openclaw@2026.3.12
 
 # Pre-configure XFCE4 with Windows-like layout
 COPY scripts/setup-desktop.sh /tmp/setup-desktop.sh

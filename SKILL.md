@@ -1,7 +1,7 @@
 ---
 name: camera-claw
 description: "Security camera for your AI agent — sandbox, record, and monitor OpenClaw"
-version: 2.0.0
+version: 2026.3.12
 icon: assets/camera-claw-icon.png
 entry: scripts/monitor.js
 deploy: deploy.sh

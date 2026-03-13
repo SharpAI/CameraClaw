@@ -82,18 +82,20 @@ echo ""
 echo "🐳 Preparing OpenClaw Docker image..."
 
 # Check if image already exists
-if docker image inspect openclaw:local &>/dev/null 2>&1; then
-    echo "✅ OpenClaw image: openclaw:local (already built)"
+if docker image inspect openclaw:2026.3.12 &>/dev/null 2>&1; then
+    echo "✅ OpenClaw image: openclaw:2026.3.12 (already built)"
 else
     echo "   Image openclaw:local not found — building locally..."
 
     echo "   Building openclaw:local (npm install + desktop packages)..."
     # Build using the Dockerfile at the skill root
     # Build context is the skill root so COPY scripts/setup-desktop.sh works
-    docker build -t openclaw:local "$SCRIPT_DIR"
+    docker build -t openclaw:2026.3.12 "$SCRIPT_DIR"
+    # Also tag as openclaw:local for backward compatibility
+    docker tag openclaw:2026.3.12 openclaw:local
 
-    if docker image inspect openclaw:local &>/dev/null 2>&1; then
-        echo "✅ OpenClaw image: openclaw:local (built locally)"
+    if docker image inspect openclaw:2026.3.12 &>/dev/null 2>&1; then
+        echo "✅ OpenClaw image: openclaw:2026.3.12 (built locally)"
     else
         echo "❌ Failed to build OpenClaw image"
         exit 1

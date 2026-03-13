@@ -1,5 +1,5 @@
 {
-  "version": "1.0.0",
+  "version": "2026.3.12",
   "repository": "SharpAI/CameraClaw",
   "url": "https://github.com/SharpAI/CameraClaw",
   "updated": "2026-03-11",
@@ -12,7 +12,7 @@
       "id": "camera-claw",
       "name": "Camera Claw",
       "description": "Security camera for your AI agent — sandbox, record, and monitor OpenClaw activity.",
-      "version": "1.1.0",
+      "version": "2026.3.12",
       "category": "integrations",
       "url": "https://github.com/SharpAI/CameraClaw",
       "repo_url": "https://github.com/SharpAI/CameraClaw",

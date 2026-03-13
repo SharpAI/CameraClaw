@@ -50,8 +50,8 @@ params:
   - key: openclaw_version
     label: OpenClaw Version
     type: string
-    default: local
-    description: "Docker image tag for OpenClaw (e.g. 'local', '2026.3.8')"
+    default: "2026.3.12"
+    description: "Docker image tag for OpenClaw (e.g. 'local', '2026.3.12')"
 
   - key: openclaw_gateway_port
     label: Gateway Port
