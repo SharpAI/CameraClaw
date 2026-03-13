@@ -51,6 +51,10 @@ const DEFAULT_CONFIG = {
   openclaw_gateway_token: '',
   openclaw_gateway_port: 18789,
   openclaw_gateway_bind: 'loopback',
+  // API Key Bridge — 3-tier cascade
+  api_key_source: 'auto',     // 'auto' | 'manual' | 'custom'
+  openai_api_key: '',
+  anthropic_api_key: '',
 };
 
 /** @type {Map<string, InstanceState>} */
@@ -151,6 +155,103 @@ function parseValue(raw, expectedType) {
 
 function ts() {
   return new Date().toISOString();
+}
+
+// ─── API Key Bridge ──────────────────────────────────────────────────────────
+
+/**
+ * Rewrite localhost / 127.0.0.1 URLs to host.docker.internal
+ * so the Docker container can reach local LLM servers on the host.
+ */
+function rewriteForDocker(url) {
+  if (!url) return url;
+  return url.replace(/\blocalhost\b/g, 'host.docker.internal')
+            .replace(/\b127\.0\.0\.1\b/g, 'host.docker.internal');
+}
+
+/**
+ * Resolve LLM API keys based on the 3-tier cascade:
+ *   1. custom  — use explicit keys from skill config
+ *   2. auto    — read from Aegis llm-config.json (zero-config default)
+ *   3. manual  — return empty; user configures inside OpenClaw
+ *
+ * Returns { openaiApiKey, openaiBaseUrl, anthropicApiKey }
+ */
+function resolveApiKeys(config) {
+  const result = { openaiApiKey: '', openaiBaseUrl: '', openaiModels: [], anthropicApiKey: '', anthropicModels: [] };
+
+  if (config.api_key_source === 'manual') {
+    log('API keys: manual mode — OpenClaw manages its own keys');
+    return result;
+  }
+
+  if (config.api_key_source === 'custom') {
+    result.openaiApiKey = config.openai_api_key || '';
+    result.anthropicApiKey = config.anthropic_api_key || '';
+    // Provide sensible default model lists for custom keys
+    if (result.openaiApiKey) {
+      result.openaiModels = [
+        { id: 'gpt-5.4', name: 'GPT 5.4' },
+        { id: 'gpt-4o', name: 'GPT 4o' },
+        { id: 'gpt-4o-mini', name: 'GPT 4o Mini' },
+      ];
+    }
+    if (result.anthropicApiKey) {
+      result.anthropicModels = [
+        { id: 'claude-sonnet-4.5-20250915', name: 'Claude Sonnet 4.5' },
+        { id: 'claude-haiku-4.5-20251015', name: 'Claude Haiku 4.5' },
+      ];
+    }
+    log(`API keys: custom mode — OpenAI: ${result.openaiApiKey ? '***' : '(empty)'}, Anthropic: ${result.anthropicApiKey ? '***' : '(empty)'}`);
+    return result;
+  }
+
+  // auto mode — read from Aegis llm-config.json
+  const aegisDir = process.env.AEGIS_AI_HOME || join(homedir(), '.aegis-ai');
+  const configPath = join(aegisDir, 'llm-config.json');
+
+  try {
+    if (existsSync(configPath)) {
+      const raw = readFileSync(configPath, 'utf-8');
+      const llmConfig = JSON.parse(raw);
+
+      // Extract provider keys — llm-config.json structure:
+      // { providers: { openai: { apiKey, baseUrl, models: [...] }, anthropic: { apiKey, models: [...] } } }
+      const providers = llmConfig.providers || llmConfig;
+
+      if (providers.openai?.apiKey || providers.openai?.api_key) {
+        result.openaiApiKey = providers.openai.apiKey || providers.openai.api_key || '';
+        const baseUrl = providers.openai.baseUrl || providers.openai.base_url || '';
+        result.openaiBaseUrl = rewriteForDocker(baseUrl);
+        // Forward model list — convert string array to OpenClaw {id, name} objects
+        const srcModels = providers.openai.models || [];
+        result.openaiModels = srcModels.map(m => typeof m === 'string' ? { id: m, name: m } : { id: m.id || m, name: m.name || m.id || m });
+      }
+      if (providers.anthropic?.apiKey || providers.anthropic?.api_key) {
+        result.anthropicApiKey = providers.anthropic.apiKey || providers.anthropic.api_key || '';
+        const srcModels = providers.anthropic.models || [];
+        result.anthropicModels = srcModels.map(m => typeof m === 'string' ? { id: m, name: m } : { id: m.id || m, name: m.name || m.id || m });
+      }
+
+      // Also check top-level keys (some configs use flat structure)
+      if (!result.openaiApiKey && llmConfig.openai_api_key) {
+        result.openaiApiKey = llmConfig.openai_api_key;
+      }
+      if (!result.anthropicApiKey && llmConfig.anthropic_api_key) {
+        result.anthropicApiKey = llmConfig.anthropic_api_key;
+      }
+
+      log(`API keys: auto mode — read from ${configPath}`);
+      log(`  OpenAI: ${result.openaiApiKey ? '***' : '(none)'}, BaseURL: ${result.openaiBaseUrl || '(default)'}, Models: ${result.openaiModels.length}`);
+      log(`  Anthropic: ${result.anthropicApiKey ? '***' : '(none)'}, Models: ${result.anthropicModels.length}`);
+    } else {
+      log(`API keys: auto mode — ${configPath} not found, no keys to forward`);
+    }
+  } catch (err) {
+    log(`API keys: auto mode — failed to read ${configPath}: ${err.message}`);
+  }
+
+  return result;
 }
 
 // ─── Port Detection ──────────────────────────────────────────────────────────
@@ -564,6 +665,7 @@ function resolveComposeFile() {
   return candidates.find(f => existsSync(f)) || null;
 }
 
+
 function buildComposeEnv(instanceId) {
   const instance = instances.get(instanceId);
   if (!instance) return process.env;
@@ -576,6 +678,10 @@ function buildComposeEnv(instanceId) {
     OPENCLAW_WORKSPACE_DIR: join(instance.configDir, 'workspace'),
     OPENCLAW_GATEWAY_TOKEN: instance.token,
     OPENCLAW_IMAGE: `openclaw:${instances.get(instanceId)?._openclawVersion || 'local'}`,
+    // LLM API keys — resolved by the 3-tier cascade
+    OPENAI_API_KEY: instance._apiKeys?.openaiApiKey || '',
+    OPENAI_BASE_URL: instance._apiKeys?.openaiBaseUrl || '',
+    ANTHROPIC_API_KEY: instance._apiKeys?.anthropicApiKey || '',
   };
 }
 
@@ -608,6 +714,61 @@ async function createInstance(config, instanceId, name) {
     return null;
   }
 
+  // Resolve API keys using the 3-tier cascade (custom → auto → manual)
+  const apiKeys = resolveApiKeys(config);
+
+  // Pre-write openclaw.json with API keys + gateway settings before docker compose up.
+  // The docker-compose.yml entrypoint only creates openclaw.json if it doesn't exist,
+  // so this file will be preserved.
+  const openclawJsonPath = join(configDir, 'openclaw.json');
+  const openclawConfig = {
+    gateway: {
+      controlUi: {
+        dangerouslyAllowHostHeaderOriginFallback: true,
+        allowInsecureAuth: true,
+      },
+    },
+  };
+
+  // Read existing config to preserve user-modified settings
+  try {
+    if (existsSync(openclawJsonPath)) {
+      Object.assign(openclawConfig, JSON.parse(readFileSync(openclawJsonPath, 'utf-8')));
+    }
+  } catch { /* start fresh if corrupted */ }
+
+  // Merge provider keys
+  if (apiKeys.openaiApiKey || apiKeys.anthropicApiKey) {
+    if (!openclawConfig.models) openclawConfig.models = {};
+    if (!openclawConfig.models.providers) openclawConfig.models.providers = {};
+
+    if (apiKeys.openaiApiKey) {
+      openclawConfig.models.providers.openai = {
+        ...(openclawConfig.models.providers.openai || {}),
+        apiKey: apiKeys.openaiApiKey,
+        baseUrl: apiKeys.openaiBaseUrl || 'https://api.openai.com/v1',
+        models: apiKeys.openaiModels.length > 0 ? apiKeys.openaiModels : [
+          { id: 'gpt-5.4', name: 'GPT 5.4' },
+          { id: 'gpt-4o', name: 'GPT 4o' },
+          { id: 'gpt-4o-mini', name: 'GPT 4o Mini' },
+        ],
+      };
+    }
+    if (apiKeys.anthropicApiKey) {
+      openclawConfig.models.providers.anthropic = {
+        ...(openclawConfig.models.providers.anthropic || {}),
+        apiKey: apiKeys.anthropicApiKey,
+        models: apiKeys.anthropicModels.length > 0 ? apiKeys.anthropicModels : [
+          { id: 'claude-sonnet-4.5-20250915', name: 'Claude Sonnet 4.5' },
+          { id: 'claude-haiku-4.5-20251015', name: 'Claude Haiku 4.5' },
+        ],
+      };
+    }
+  }
+
+  writeFileSync(openclawJsonPath, JSON.stringify(openclawConfig, null, 2), 'utf-8');
+  log(`Pre-wrote ${openclawJsonPath} (providers: ${Object.keys(openclawConfig.models?.providers || {}).join(', ') || 'none'})`);
+
   // Pre-register instance so buildComposeEnv can find it
   /** @type {InstanceState} */
   const instance = {
@@ -623,6 +784,7 @@ async function createInstance(config, instanceId, name) {
     _pauseRecording: null,
     _resumeRecording: null,
     _openclawVersion: config.openclaw_version || 'local',
+    _apiKeys: apiKeys,
   };
   instances.set(instanceId, instance);
 
@@ -636,6 +798,10 @@ async function createInstance(config, instanceId, name) {
     OPENCLAW_GATEWAY_TOKEN: token,
     OPENCLAW_GATEWAY_BIND: config.openclaw_gateway_bind === 'lan' ? 'lan' : 'loopback',
     OPENCLAW_IMAGE: `openclaw:${config.openclaw_version || 'local'}`,
+    // LLM API keys
+    OPENAI_API_KEY: apiKeys.openaiApiKey || '',
+    OPENAI_BASE_URL: apiKeys.openaiBaseUrl || '',
+    ANTHROPIC_API_KEY: apiKeys.anthropicApiKey || '',
   };
 
   log(`Starting instance "${instanceId}" on port ${port} (KasmVNC:${kasmPort})`);
@@ -677,6 +843,7 @@ async function createInstance(config, instanceId, name) {
 
     // Wait a moment for KasmVNC to initialize
     await new Promise(r => setTimeout(r, 3000));
+
 
     // Emit vnc_ready
     emit({
