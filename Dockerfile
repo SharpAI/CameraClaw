@@ -34,7 +34,8 @@ RUN npm install -g openclaw@latest
 
 # Pre-configure XFCE4 with Windows-like layout
 COPY scripts/setup-desktop.sh /tmp/setup-desktop.sh
-RUN chmod +x /tmp/setup-desktop.sh && \
+RUN sed -i 's/\r$//' /tmp/setup-desktop.sh && \
+    chmod +x /tmp/setup-desktop.sh && \
     /tmp/setup-desktop.sh /home/node && \
     rm /tmp/setup-desktop.sh
 
