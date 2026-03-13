@@ -86,13 +86,22 @@ docker image inspect openclaw:local >nul 2>&1
 if !errorlevel! equ 0 (
     echo [OK] OpenClaw image: openclaw:local ^(already built^)
 ) else (
-    docker pull sharpai/openclaw:latest >nul 2>&1
+    echo    Image openclaw:local not found — building locally...
+
+    REM Build using the Dockerfile at the skill root
+    REM Build context is the skill root so COPY scripts/setup-desktop.sh works
+    docker build -t openclaw:local "%~dp0."
+    if !errorlevel! neq 0 (
+        echo [ERROR] Failed to build OpenClaw image
+        exit /b 1
+    )
+
+    docker image inspect openclaw:local >nul 2>&1
     if !errorlevel! equ 0 (
-        docker tag sharpai/openclaw:latest openclaw:local
-        echo [OK] OpenClaw image: pulled and tagged
+        echo [OK] OpenClaw image: openclaw:local ^(built locally^)
     ) else (
-        echo [WARN] OpenClaw image not available yet
-        echo    Build manually or ensure sharpai/openclaw:latest is on Docker Hub
+        echo [ERROR] Failed to build OpenClaw image
+        exit /b 1
     )
 )
 
