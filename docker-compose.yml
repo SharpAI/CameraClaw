@@ -190,6 +190,8 @@ services:
         CFGEOF
 
         # Create desktop shortcut to OpenClaw Control UI (with auth token)
+        # NOTE: $$ escaping is required — Docker Compose interprets single $
+        # as env-var substitution; $$ produces a literal $ for the shell.
         GATEWAY_URL="http://localhost:18789"
         TOKEN="${OPENCLAW_GATEWAY_TOKEN}"
         mkdir -p /home/node/Desktop
@@ -200,7 +202,7 @@ services:
         Name=OpenClaw Control
         Comment=Open the OpenClaw Control UI
         Icon=web-browser
-        Exec=chromium --no-sandbox --disable-gpu "${GATEWAY_URL}?token=${TOKEN}"
+        Exec=chromium --no-sandbox --disable-gpu "$${GATEWAY_URL}?token=$${TOKEN}"
         Terminal=false
         Categories=Network;WebBrowser;
         SHORTCUT
@@ -215,7 +217,7 @@ services:
         sleep 5
         DISPLAY=:99 chromium --no-sandbox --disable-gpu \
           --start-maximized \
-          "${GATEWAY_URL}?token=${TOKEN}" &
+          "$${GATEWAY_URL}?token=$${TOKEN}" &
 
         # Keep container alive
         wait
