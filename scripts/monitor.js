@@ -844,6 +844,26 @@ async function createInstance(config, instanceId, name) {
     // Wait a moment for KasmVNC to initialize
     await new Promise(r => setTimeout(r, 3000));
 
+    // Apply API keys to the running gateway via `docker exec openclaw config set`.
+    // The pre-write puts the config file in place, but the gateway process doesn't
+    // hot-reload it. Using `config set` writes to the gateway's live config store.
+    if (apiKeys.openaiApiKey || apiKeys.anthropicApiKey) {
+      try {
+        const openclawConfig = JSON.parse(readFileSync(join(configDir, 'openclaw.json'), 'utf-8'));
+        if (openclawConfig.models?.providers) {
+          for (const [provider, provConf] of Object.entries(openclawConfig.models.providers)) {
+            const val = JSON.stringify(provConf);
+            execSync(
+              `docker compose -f "${composeFile}" exec -T openclaw-gateway openclaw config set 'models.providers.${provider}' '${val}' --strict-json`,
+              { env, stdio: 'pipe', timeout: 10000 }
+            );
+            log(`Applied ${provider} config to running gateway (${(provConf.models || []).length} models)`);
+          }
+        }
+      } catch (err) {
+        log(`Warning: post-start config apply failed: ${err.message}`);
+      }
+    }
 
     // Emit vnc_ready
     emit({
