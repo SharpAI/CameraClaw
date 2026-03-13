@@ -213,8 +213,17 @@ services:
           --title="OpenClaw Gateway" \
           -e "openclaw gateway --bind lan --port 18789 --allow-unconfigured" &
 
-        # Wait for gateway to start, then auto-open Chromium to OpenClaw
-        sleep 5
+        # Wait for gateway to be ready (poll port 18789, up to 30s)
+        echo "Waiting for gateway on port 18789..."
+        for i in $$(seq 1 30); do
+          if wget -q --spider http://localhost:18789/ 2>/dev/null; then
+            echo "Gateway is ready (after $${i}s)"
+            break
+          fi
+          sleep 1
+        done
+
+        # Auto-open Chromium to OpenClaw gateway
         DISPLAY=:99 chromium --no-sandbox --disable-gpu \
           --start-maximized \
           "$${GATEWAY_URL}?token=$${TOKEN}" &
