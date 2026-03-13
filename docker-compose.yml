@@ -6,6 +6,8 @@ services:
   openclaw-gateway:
     image: ${OPENCLAW_IMAGE:-openclaw:local}
     pull_policy: never
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
     environment:
       HOME: /home/node
       TERM: xterm-256color
@@ -14,6 +16,10 @@ services:
       LC_ALL: en_US.UTF-8
       LANGUAGE: en_US:en
       OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN}
+      # LLM API keys — injected by monitor.js based on api_key_source config
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      OPENAI_BASE_URL: ${OPENAI_BASE_URL:-}
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
     volumes:
       - ${OPENCLAW_CONFIG_DIR:-~/.openclaw}:/home/node/.openclaw
       - ${OPENCLAW_WORKSPACE_DIR:-~/.openclaw/workspace}:/home/node/.openclaw/workspace
@@ -160,6 +166,10 @@ services:
           interface: 0.0.0.0
           ssl:
             require_ssl: false
+        user_session:
+          idle_timeout: never
+        runtime_configuration:
+          allow_client_to_override_kasm_server_settings: false
         VNCEOF
 
         # Start KasmVNC (wrapper handles Xvnc + web client).
@@ -175,9 +185,11 @@ services:
           -sslOnly 0
         sleep 5
 
-        # Create OpenClaw config to allow host-header origin fallback
-        # and insecure auth (token-only, no device identity required)
+        # Create OpenClaw config ONLY if it doesn't already exist.
+        # monitor.js pre-writes this file with API keys + gateway settings
+        # before docker compose up, so we must not overwrite it.
         mkdir -p /home/node/.openclaw
+        if [ ! -f /home/node/.openclaw/openclaw.json ]; then
         cat > /home/node/.openclaw/openclaw.json << 'CFGEOF'
         {
           "gateway": {
@@ -188,6 +200,7 @@ services:
           }
         }
         CFGEOF
+        fi
 
         # Create desktop shortcut to OpenClaw Control UI (with auth token)
         # NOTE: $$ escaping is required — Docker Compose interprets single $

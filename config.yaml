@@ -85,3 +85,25 @@ params:
     type: boolean
     default: true
     description: "Emit alerts when container makes unexpected network connections"
+
+  - key: api_key_source
+    label: API Key Source
+    type: select
+    default: auto
+    description: "How OpenClaw gets LLM API keys: auto (forward Aegis keys), manual (configure in OpenClaw), custom (use explicit keys below)"
+    options:
+      - { value: auto, label: "Auto (use Aegis keys)" }
+      - { value: manual, label: "Manual (configure in OpenClaw)" }
+      - { value: custom, label: "Custom (set below)" }
+
+  - key: openai_api_key
+    label: OpenAI API Key
+    type: string
+    default: ""
+    description: "OpenAI API key — only used when api_key_source=custom"
+
+  - key: anthropic_api_key
+    label: Anthropic API Key
+    type: string
+    default: ""
+    description: "Anthropic API key — only used when api_key_source=custom"

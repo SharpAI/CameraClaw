@@ -128,6 +128,31 @@ parameters:
     description: "loopback = localhost only, lan = accessible on LAN"
     group: OpenClaw
 
+  # ── API Keys ────────────────────────────────────────────────────────────────
+  - name: api_key_source
+    label: "API Key Source"
+    type: select
+    options: ["auto", "manual", "custom"]
+    default: "auto"
+    description: "auto = forward Aegis keys automatically, manual = configure inside OpenClaw, custom = use keys below"
+    group: "API Keys"
+
+  - name: openai_api_key
+    label: "OpenAI API Key"
+    type: string
+    default: ""
+    description: "OpenAI API key (only used when source = custom)"
+    group: "API Keys"
+    secret: true
+
+  - name: anthropic_api_key
+    label: "Anthropic API Key"
+    type: string
+    default: ""
+    description: "Anthropic API key (only used when source = custom)"
+    group: "API Keys"
+    secret: true
+
 capabilities:
   live_detection:
     script: scripts/monitor.js
