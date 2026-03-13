@@ -21,6 +21,19 @@ import { homedir } from 'node:os';
 import { join, resolve, basename } from 'node:path';
 import { readFile } from 'node:fs/promises';
 
+// ─── PATH Augmentation ──────────────────────────────────────────────────────
+// When spawned from Electron (launched via Finder/Dock on macOS), the child
+// process may not inherit /opt/homebrew/bin or /usr/local/bin in PATH.
+// Docker, docker-compose, and other CLI tools live in these directories.
+{
+  const extraPaths = ['/opt/homebrew/bin', '/usr/local/bin', '/usr/bin'];
+  const currentPath = process.env.PATH || '';
+  const missing = extraPaths.filter(p => !currentPath.split(':').includes(p));
+  if (missing.length > 0) {
+    process.env.PATH = [...missing, currentPath].join(':');
+  }
+}
+
 // ─── Config ──────────────────────────────────────────────────────────────────
 
 const DEFAULT_CONFIG = {
