@@ -77,28 +77,31 @@ if not exist "!OPENCLAW_DIR!" (
 )
 echo [OK] Config dir: !OPENCLAW_DIR!
 
-REM ── Pull OpenClaw Image ────────────────
+REM ── Build/Pull OpenClaw Image ──────────
 
 echo.
 echo Preparing OpenClaw Docker image...
 
-docker image inspect openclaw:local >nul 2>&1
+docker image inspect openclaw:2026.3.12 >nul 2>&1
 if !errorlevel! equ 0 (
-    echo [OK] OpenClaw image: openclaw:local ^(already built^)
+    echo [OK] OpenClaw image: openclaw:2026.3.12 ^(already built^)
 ) else (
-    echo    Image openclaw:local not found — building locally...
+    echo    Image openclaw:2026.3.12 not found — building locally...
 
     REM Build using the Dockerfile at the skill root
     REM Build context is the skill root so COPY scripts/setup-desktop.sh works
-    docker build -t openclaw:local "%~dp0."
+    docker build -t openclaw:2026.3.12 "%~dp0."
     if !errorlevel! neq 0 (
         echo [ERROR] Failed to build OpenClaw image
         exit /b 1
     )
 
-    docker image inspect openclaw:local >nul 2>&1
+    REM Also tag as openclaw:local for backward compatibility
+    docker tag openclaw:2026.3.12 openclaw:local
+
+    docker image inspect openclaw:2026.3.12 >nul 2>&1
     if !errorlevel! equ 0 (
-        echo [OK] OpenClaw image: openclaw:local ^(built locally^)
+        echo [OK] OpenClaw image: openclaw:2026.3.12 ^(built locally^)
     ) else (
         echo [ERROR] Failed to build OpenClaw image
         exit /b 1
